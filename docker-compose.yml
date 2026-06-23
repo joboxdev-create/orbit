@@ -35,6 +35,12 @@ services:
       PORT: 3001
       DATABASE_URL: postgresql://${POSTGRES_USER:-orbit}:${POSTGRES_PASSWORD:-orbit}@postgres:5432/${POSTGRES_DB:-orbit}
       ORBIT_ENCRYPTION_KEY: ${ORBIT_ENCRYPTION_KEY}
+      # ORBIT-internal auth: the core issues its own JWTs and seeds a bootstrap admin.
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_ACCESS_TTL: ${JWT_ACCESS_TTL:-15m}
+      JWT_REFRESH_TTL: ${JWT_REFRESH_TTL:-7d}
+      ORBIT_ADMIN_EMAIL: ${ORBIT_ADMIN_EMAIL:-admin@orbit.local}
+      ORBIT_ADMIN_PASSWORD: ${ORBIT_ADMIN_PASSWORD:-change-me-in-local}
     ports:
       - "3001:3001"
     depends_on:
@@ -51,6 +57,9 @@ services:
       PORT: 3000
       # Server-side call inside the compose network reaches the core service.
       CORE_API_URL: http://core:3001/api
+      # Auth.js session cookie signing + base URL.
+      AUTH_SECRET: ${AUTH_SECRET}
+      AUTH_URL: ${AUTH_URL:-http://localhost:3000}
     ports:
       - "3000:3000"
     depends_on:

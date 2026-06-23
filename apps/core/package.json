@@ -22,6 +22,7 @@
     "@nestjs/passport": "^11.0.5",
     "@nestjs/platform-express": "^11.0.1",
     "@orbit/connector-github": "workspace:*",
+    "@orbit/connector-keycloak": "workspace:*",
     "@orbit/connector-sdk": "workspace:*",
     "@orbit/shared": "workspace:*",
     "@prisma/client": "^6.1.0",
