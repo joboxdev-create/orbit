@@ -126,6 +126,7 @@ export const githubConnector: ConnectorDefinition<
   layer: "repository",
   displayName: "GitHub",
   description: "Repositories, issues and pull requests on GitHub.",
+  icon: "github",
   configSchema,
   credentialsSchema,
   capabilities: [listOrgRepos, getRepo, listRepoIssues],

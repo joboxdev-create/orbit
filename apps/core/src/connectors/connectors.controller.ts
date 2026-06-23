@@ -9,8 +9,12 @@ import {
   ConnectorRegistry,
   mcpToolsFromConnector,
 } from "@orbit/connector-sdk";
+import { Public } from "../auth/decorators";
 import { CONNECTOR_REGISTRY } from "./connectors.tokens";
 
+// Connector *catalog* (available types + their MCP tools) is non-sensitive
+// metadata, not tenant data — expose it without authentication.
+@Public()
 @Controller("connectors")
 export class ConnectorsController {
   constructor(
@@ -26,6 +30,7 @@ export class ConnectorsController {
       layer: def.layer,
       displayName: def.displayName,
       description: def.description,
+      icon: def.icon ?? null,
       capabilities: def.capabilities.length,
       apiOperations: def.api?.operations.length ?? 0,
     }));

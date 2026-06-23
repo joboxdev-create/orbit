@@ -1,5 +1,7 @@
-import { LAYER_LABELS } from "@orbit/shared";
+import { LAYER_LABELS, type LayerKind } from "@orbit/shared";
 import { getConnectors } from "@/lib/api";
+import { LayerIcon } from "@/components/layer-icon";
+import { BrandIcon } from "@/components/brand-icon";
 
 export default async function HomePage() {
   const connectors = await getConnectors();
@@ -23,8 +25,13 @@ export default async function HomePage() {
         <div className="grid">
           {Object.entries(LAYER_LABELS).map(([kind, label]) => (
             <div key={kind} className="card">
-              <strong>{label}</strong>
-              <div className="muted" style={{ fontSize: 13 }}>
+              <div
+                style={{ display: "flex", alignItems: "center", gap: 10 }}
+              >
+                <LayerIcon kind={kind as LayerKind} />
+                <strong>{label}</strong>
+              </div>
+              <div className="muted" style={{ fontSize: 13, marginTop: 4 }}>
                 {kind}
               </div>
             </div>
@@ -45,8 +52,17 @@ export default async function HomePage() {
           <div className="grid">
             {connectors.map((c) => (
               <div key={c.type} className="card">
-                <span className="badge">{c.layer}</span>
-                <h3 style={{ margin: "8px 0 4px" }}>{c.displayName}</h3>
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                  }}
+                >
+                  <BrandIcon slug={c.icon} />
+                  <span className="badge">{c.layer}</span>
+                </div>
+                <h3 style={{ margin: "10px 0 4px" }}>{c.displayName}</h3>
                 <p className="muted" style={{ fontSize: 13, margin: 0 }}>
                   {c.description}
                 </p>

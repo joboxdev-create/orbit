@@ -7,6 +7,7 @@ export interface ConnectorSummary {
   layer: string;
   displayName: string;
   description: string;
+  icon: string | null;
   capabilities: number;
   apiOperations: number;
 }

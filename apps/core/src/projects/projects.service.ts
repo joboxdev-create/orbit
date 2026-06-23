@@ -1,30 +1,40 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
 import type { CreateProject } from "@orbit/shared";
 import { PrismaService } from "../prisma/prisma.service";
+import { AccessControlService } from "../authz/access-control.service";
 
 @Injectable()
 export class ProjectsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly acl: AccessControlService,
+  ) {}
 
-  async create(input: CreateProject) {
-    // Surfacing a clear error beats a raw FK violation if the org is missing.
-    const org = await this.prisma.organization.findUnique({
-      where: { id: input.orgId },
-    });
-    if (!org) throw new NotFoundException(`Organization not found: ${input.orgId}`);
+  async create(userId: string, input: CreateProject) {
+    // Must be at least a member of the target org to add projects.
+    await this.acl.assertMember(userId, input.orgId, "member");
     return this.prisma.project.create({ data: input });
   }
 
-  findAll(orgId?: string) {
+  async findAll(userId: string, orgId?: string) {
+    if (orgId) {
+      await this.acl.assertMember(userId, orgId);
+      return this.prisma.project.findMany({
+        where: { orgId },
+        orderBy: { createdAt: "desc" },
+      });
+    }
+    // No org filter: every project across the user's organizations.
     return this.prisma.project.findMany({
-      where: orgId ? { orgId } : undefined,
+      where: { org: { memberships: { some: { userId } } } },
       orderBy: { createdAt: "desc" },
     });
   }
 
-  async findOne(id: string) {
+  async findOne(userId: string, id: string) {
     const project = await this.prisma.project.findUnique({ where: { id } });
     if (!project) throw new NotFoundException(`Project not found: ${id}`);
+    await this.acl.assertMember(userId, project.orgId);
     return project;
   }
 }

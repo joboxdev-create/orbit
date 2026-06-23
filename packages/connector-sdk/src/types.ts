@@ -82,6 +82,8 @@ export interface ConnectorDefinition<
   layer: LayerKind;
   displayName: string;
   description: string;
+  /** Simple Icons slug for the brand logo (e.g. "github", "gitlab", "jira"). */
+  icon?: string;
   /** Non-secret configuration shape (org name, base url, ...). */
   configSchema: z.ZodType<Config, z.ZodTypeDef, any>;
   /** Secret credentials shape (token, key, ...). Stored encrypted by core. */

@@ -10,6 +10,7 @@ import { type ConnectorContext, ConnectorRegistry } from "@orbit/connector-sdk";
 import type { ZodType } from "zod";
 import { PrismaService } from "../prisma/prisma.service";
 import { CryptoService } from "../crypto/crypto.service";
+import { AccessControlService } from "../authz/access-control.service";
 import { CONNECTOR_REGISTRY } from "./connectors.tokens";
 
 export interface CreateInstanceInput {
@@ -38,12 +39,14 @@ export class ConnectorInstancesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly crypto: CryptoService,
+    private readonly acl: AccessControlService,
     @Inject(CONNECTOR_REGISTRY)
     private readonly registry: ConnectorRegistry,
   ) {}
 
-  async create(projectId: string, input: CreateInstanceInput) {
-    await this.requireProject(projectId);
+  async create(userId: string, projectId: string, input: CreateInstanceInput) {
+    const project = await this.requireProject(projectId);
+    await this.acl.assertMember(userId, project.orgId, "member");
 
     const def = this.registry.get(input.connectorType);
     if (!def) {
@@ -86,7 +89,9 @@ export class ConnectorInstancesService {
     });
   }
 
-  list(projectId: string) {
+  async list(userId: string, projectId: string) {
+    const project = await this.requireProject(projectId);
+    await this.acl.assertMember(userId, project.orgId);
     return this.prisma.connectorInstance.findMany({
       where: { projectId },
       orderBy: { createdAt: "desc" },
@@ -96,12 +101,14 @@ export class ConnectorInstancesService {
 
   /** Invoke a connector capability directly — the no-AI execution path. */
   async invoke(
+    userId: string,
     instanceId: string,
     capabilityName: string,
     rawInput: unknown,
   ) {
     const instance = await this.prisma.connectorInstance.findUnique({
       where: { id: instanceId },
+      include: { project: { select: { orgId: true } } },
     });
     if (!instance) {
       throw new NotFoundException(`Connector instance not found: ${instanceId}`);
@@ -120,6 +127,13 @@ export class ConnectorInstancesService {
         `Unknown capability "${capabilityName}" for ${def.type}`,
       );
     }
+
+    // Read-only capabilities need only viewer; mutating ones need member.
+    await this.acl.assertMember(
+      userId,
+      instance.project.orgId,
+      capability.readOnly ? "viewer" : "member",
+    );
 
     const input = this.parseOrThrow(capability.input, rawInput, "input");
     const credentials = instance.encryptedCredentials

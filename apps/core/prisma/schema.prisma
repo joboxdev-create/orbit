@@ -8,12 +8,40 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model User {
+  id           String       @id @default(uuid())
+  email        String       @unique
+  name         String?
+  // Null for users provisioned by an external IdP (OIDC/Keycloak).
+  passwordHash String?
+  // "local" today; "oidc"/"keycloak"/... when an external IdP is wired in.
+  provider     String       @default("local")
+  externalId   String?
+  createdAt    DateTime     @default(now())
+  memberships  Membership[]
+}
+
+// User <-> Organization with a role. Authorization is scoped per organization.
+model Membership {
+  id        String       @id @default(uuid())
+  userId    String
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orgId     String
+  org       Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  // owner | admin | member | viewer
+  role      String       @default("member")
+  createdAt DateTime     @default(now())
+
+  @@unique([userId, orgId])
+}
+
 model Organization {
-  id        String    @id @default(uuid())
-  name      String
-  slug      String    @unique
-  createdAt DateTime  @default(now())
-  projects  Project[]
+  id          String       @id @default(uuid())
+  name        String
+  slug        String       @unique
+  createdAt   DateTime     @default(now())
+  projects    Project[]
+  memberships Membership[]
 }
 
 model Project {

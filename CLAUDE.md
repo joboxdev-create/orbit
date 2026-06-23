@@ -32,27 +32,36 @@ pnpm --filter @orbit/core prisma:generate  # rigenera il Prisma Client
 pnpm --filter @orbit/core prisma:studio    # GUI sul DB
 ```
 
-Prima esecuzione: `cp .env.example .env`, genera `ORBIT_ENCRYPTION_KEY` con `openssl rand -base64 32`, `docker compose up -d postgres`, poi `pnpm --filter @orbit/core prisma:migrate`.
+Prima esecuzione: `cp .env.example .env`, genera `ORBIT_ENCRYPTION_KEY` (`openssl rand -base64 32`) e `JWT_SECRET` (`openssl rand -base64 48`), `docker compose up -d postgres`, poi `pnpm --filter @orbit/core prisma:migrate`. Quindi `POST /api/auth/register` per creare il primo utente e usare il suo `accessToken`.
 
-Endpoint core attuali:
-- `GET  /api/health`
-- `GET  /api/connectors` · `GET /api/connectors/:type/tools` — tipi di connettore registrati e relativi tool MCP
-- `POST /api/organizations` · `GET /api/organizations` · `GET /api/organizations/:id`
+Endpoint core attuali (tutto richiede `Authorization: Bearer <accessToken>` salvo i `@Public`):
+- `GET  /api/health` *(public)*
+- `GET  /api/connectors` · `GET /api/connectors/:type/tools` *(public — catalogo, non dati tenant)*
+- `POST /api/auth/register` · `POST /api/auth/login` · `POST /api/auth/refresh` *(public)* · `GET /api/auth/me`
+- `POST /api/organizations` — crea org e rende il creatore `owner` · `GET /api/organizations` *(solo le proprie)* · `GET /api/organizations/:id`
 - `POST /api/projects` · `GET /api/projects?orgId=` · `GET /api/projects/:id`
 - `POST /api/projects/:projectId/connectors` — crea istanza (valida config/credentials, `testConnection`, cifra le credenziali)
 - `GET  /api/projects/:projectId/connectors`
 - `POST /api/connector-instances/:id/capabilities/:name` — invoca una capability (path senza AI)
+
+## Auth & RBAC
+
+- **Auth nel core, OIDC-ready.** Local email/password (argon2) + JWT access/refresh. `JwtAuthGuard` è globale (`APP_GUARD`); le rotte pubbliche usano `@Public()`. L'utente autenticato si legge con `@CurrentUser()`.
+- **Seam OIDC:** `IdentityProvider` (oggi `LocalPasswordProvider`) + campi `provider`/`externalId` su `User`. Keycloak/OIDC si innesta qui in futuro come layer `identity`, senza toccare l'autorizzazione.
+- **RBAC per organizzazione:** `Membership(userId, orgId, role)` con ruoli `owner > admin > member > viewer` ([ROLE_RANK in auth.ts](packages/shared/src/auth.ts)). Le autorizzazioni si fanno nei service via `AccessControlService.assertMember(userId, orgId, minRole)`. Progetti e connettori sono scopizzati all'org del progetto; le capability read-only richiedono `viewer`, quelle che mutano `member`.
 
 ## Struttura del monorepo
 
 ```
 apps/
   core/                @orbit/core  — NestJS (CommonJS)
-    prisma/            schema + migrazioni (Organization, Project, ConnectorInstance)
+    prisma/            schema + migrazioni (User, Membership, Organization, Project, ConnectorInstance)
     src/prisma/        PrismaModule/Service (global)
     src/crypto/        CryptoService AES-256-GCM per credenziali (global)
+    src/auth/          register/login/refresh, JWT strategy, JwtAuthGuard, @Public/@CurrentUser, IdentityProvider
+    src/authz/         AccessControlService (assertMember + ruoli, global)
     src/common/        ZodValidationPipe
-    src/organizations/ src/projects/   CRUD dominio
+    src/organizations/ src/projects/   CRUD dominio (scopizzati per utente)
     src/connectors/    registry connettori, tipi+tool MCP, istanze, invoke capability
   web/                 @orbit/web   — Next.js (App Router, React 19)
 packages/
