@@ -1,0 +1,46 @@
+// ORBIT core data model: Organization -> Project -> ConnectorInstance.
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Organization {
+  id        String    @id @default(uuid())
+  name      String
+  slug      String    @unique
+  createdAt DateTime  @default(now())
+  projects  Project[]
+}
+
+model Project {
+  id          String              @id @default(uuid())
+  orgId       String
+  org         Organization        @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  name        String
+  slug        String
+  description String?
+  createdAt   DateTime            @default(now())
+  connectors  ConnectorInstance[]
+
+  @@unique([orgId, slug])
+}
+
+model ConnectorInstance {
+  id            String   @id @default(uuid())
+  projectId     String
+  project       Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  // Connector type id (e.g. "github"); resolved against the SDK registry.
+  connectorType String
+  layer         String
+  name          String
+  status        String   @default("configured")
+  // Non-secret, connector-defined config.
+  config        Json     @default("{}")
+  // Secret credentials, AES-256-GCM encrypted at rest (iv:tag:ciphertext, base64).
+  encryptedCredentials String?
+  createdAt     DateTime @default(now())
+}
