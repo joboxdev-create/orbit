@@ -1,59 +1,107 @@
+@import "tailwindcss";
+
+/*
+ * ORBIT theme — the original dark palette, now expressed as Tailwind v4 design
+ * tokens. `@theme` emits both `:root` CSS variables and matching utilities
+ * (e.g. `bg-panel`, `text-muted`, `border-border`, `text-accent`).
+ */
+@theme {
+  --color-bg: #0b0e14;
+  --color-panel: #141925;
+  --color-panel-2: #1a2030;
+  --color-border: #232a3b;
+  --color-text: #e6e9ef;
+  --color-muted: #8a93a6;
+  --color-accent: #5b8cff;
+  --color-danger: #f87171;
+
+  --radius-card: 10px;
+}
+
+/* Legacy aliases: a few components still read these bare names directly. */
 :root {
-  --bg: #0b0e14;
-  --panel: #141925;
-  --border: #232a3b;
-  --text: #e6e9ef;
-  --muted: #8a93a6;
-  --accent: #5b8cff;
+  --bg: var(--color-bg);
+  --panel: var(--color-panel);
+  --border: var(--color-border);
+  --text: var(--color-text);
+  --muted: var(--color-muted);
+  --accent: var(--color-accent);
+  color-scheme: dark;
 }
 
-* {
-  box-sizing: border-box;
+@layer base {
+  html,
+  body {
+    @apply m-0 bg-bg text-text antialiased;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    line-height: 1.5;
+  }
+
+  a {
+    @apply text-accent no-underline;
+  }
+
+  h1,
+  h2,
+  h3 {
+    @apply font-semibold tracking-tight text-text;
+  }
 }
 
-html,
-body {
-  margin: 0;
-  padding: 0;
-  background: var(--bg);
-  color: var(--text);
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  line-height: 1.5;
-}
+/*
+ * Reusable primitives. Repeated UI (cards, buttons, fields) lives here so the
+ * markup stays clean and every surface shares the same look — instead of
+ * re-deriving inline styles on each page.
+ */
+@layer components {
+  .container {
+    @apply mx-auto max-w-[960px] px-6 py-12;
+  }
 
-a {
-  color: var(--accent);
-  text-decoration: none;
-}
+  .grid-cards {
+    @apply grid gap-3;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  }
 
-.container {
-  max-width: 960px;
-  margin: 0 auto;
-  padding: 48px 24px;
-}
+  .card {
+    @apply rounded-card border border-border bg-panel p-4;
+  }
 
-.grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 12px;
-}
+  .card-hover {
+    @apply transition-colors hover:border-accent/50 hover:bg-panel-2;
+  }
 
-.card {
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 16px;
-}
+  .muted {
+    @apply text-muted;
+  }
 
-.muted {
-  color: var(--muted);
-}
+  .badge {
+    @apply inline-flex items-center rounded-full border border-border px-2.5 py-0.5 text-xs text-muted;
+  }
 
-.badge {
-  display: inline-block;
-  font-size: 12px;
-  color: var(--muted);
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  padding: 2px 10px;
+  /* Buttons */
+  .btn {
+    @apply inline-flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-border bg-panel px-3.5 py-2 text-sm font-medium text-text transition-colors hover:border-accent/60 hover:bg-panel-2 disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .btn-primary {
+    @apply border-accent bg-accent text-bg hover:bg-accent/90 hover:border-accent;
+  }
+
+  .btn-sm {
+    @apply px-3 py-1.5 text-[13px];
+  }
+
+  /* Forms */
+  .field {
+    @apply flex flex-col gap-1.5;
+  }
+
+  .field-label {
+    @apply text-xs text-muted;
+  }
+
+  .input {
+    @apply w-full rounded-lg border border-border bg-bg px-3 py-2 text-sm text-text outline-none transition-colors placeholder:text-muted/60 focus:border-accent;
+  }
 }

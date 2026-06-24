@@ -28,155 +28,111 @@ export default async function LandingPage() {
   const connectors = await getConnectors();
 
   return (
-    <main className="container">
-      <header
-        style={{
-          marginBottom: 48,
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          gap: 16,
-        }}
-      >
-        <Logo />
-        <AuthControls />
+    <div className="min-h-screen">
+      <header className="sticky top-0 z-30 border-b border-border bg-bg/80 backdrop-blur-md">
+        <div className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-6 py-3">
+          <Logo />
+          <AuthControls />
+        </div>
       </header>
 
-      <section
-        style={{ textAlign: "center", margin: "32px 0 56px", padding: "0 8px" }}
-      >
-        <div style={{ marginBottom: 20 }}>
-          <Logo size={84} wordmark={false} href="" />
-        </div>
-        <h1 style={{ fontSize: 44, margin: 0, lineHeight: 1.1 }}>
-          One orbit over your
-          <br />
-          whole infrastructure
-        </h1>
-        <p
-          className="muted"
-          style={{ fontSize: 18, maxWidth: 640, margin: "16px auto 28px" }}
-        >
-          ORBIT is an open source enterprise orchestrator that unifies the tools
-          your company already uses — repositories, infra, identity, docs and
-          more — into a single navigable graph.
-        </p>
-        <div
-          style={{ display: "flex", gap: 12, justifyContent: "center" }}
-        >
-          <Link
-            href={session?.user ? "/dashboard" : "/login"}
-            className="badge"
-            style={{
-              background: "var(--accent)",
-              color: "#0b0e14",
-              borderColor: "var(--accent)",
-              fontSize: 14,
-              padding: "8px 18px",
-            }}
-          >
-            {session?.user ? "Open dashboard" : "Get started"}
-          </Link>
-          <a
-            href="https://github.com"
-            className="badge"
-            style={{ fontSize: 14, padding: "8px 18px" }}
-          >
-            View on GitHub
-          </a>
-        </div>
-      </section>
-
-      <section style={{ marginBottom: 56 }}>
-        <div className="grid">
-          {FEATURES.map((f) => (
-            <div key={f.title} className="card">
-              <strong>{f.title}</strong>
-              <p className="muted" style={{ fontSize: 13, marginBottom: 0 }}>
-                {f.body}
-              </p>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <section style={{ marginBottom: 48 }}>
-        <h2>Layers</h2>
-        <p className="muted">
-          Interchangeable categories of enterprise services. Connectors attach to
-          a project under one of these.
-        </p>
-        <div className="grid">
-          {Object.entries(LAYER_LABELS).map(([kind, label]) => (
-            <div key={kind} className="card">
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <LayerIcon kind={kind as LayerKind} />
-                <strong>{label}</strong>
-              </div>
-              <div className="muted" style={{ fontSize: 13, marginTop: 4 }}>
-                {kind}
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <section>
-        <h2>Supported integrations</h2>
-        <p className="muted">
-          Connectors available out of the box. Configure them per project once
-          you sign in.
-        </p>
-        {connectors.length === 0 ? (
-          <div className="card">
-            <p className="muted" style={{ margin: 0 }}>
-              No connectors registered yet.
-            </p>
+      <main className="mx-auto max-w-5xl px-6">
+        <section className="px-2 py-16 text-center">
+          <div className="mb-5 flex justify-center">
+            <Logo size={84} wordmark={false} href="" />
           </div>
-        ) : (
-          <div className="grid">
-            {connectors.map((c) => (
-              <div key={c.type} className="card">
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                  }}
-                >
-                  <BrandIcon slug={c.icon} />
-                  <span className="badge">{c.layer}</span>
-                </div>
-                <h3 style={{ margin: "10px 0 4px" }}>{c.displayName}</h3>
-                <p className="muted" style={{ fontSize: 13, margin: 0 }}>
-                  {c.description}
-                </p>
-                <div className="muted" style={{ fontSize: 12, marginTop: 8 }}>
-                  {c.capabilities} capabilities · {c.apiOperations} API ops
+          <h1 className="m-0 text-4xl leading-[1.1] sm:text-5xl">
+            One orbit over your
+            <br />
+            whole infrastructure
+          </h1>
+          <p className="muted mx-auto mt-4 max-w-2xl text-lg">
+            ORBIT is an open source enterprise orchestrator that unifies the
+            tools your company already uses — repositories, infra, identity,
+            docs and more — into a single navigable graph.
+          </p>
+          <div className="mt-7 flex justify-center gap-3">
+            <Link
+              href={session?.user ? "/dashboard" : "/login"}
+              className="btn btn-primary"
+            >
+              {session?.user ? "Open dashboard" : "Get started"}
+            </Link>
+            <a href="https://github.com" className="btn">
+              View on GitHub
+            </a>
+          </div>
+        </section>
+
+        <section className="pb-14">
+          <div className="grid-cards">
+            {FEATURES.map((f) => (
+              <div key={f.title} className="card">
+                <strong className="text-text">{f.title}</strong>
+                <p className="muted mb-0 mt-1.5 text-[13px]">{f.body}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="pb-12">
+          <h2 className="text-xl">Layers</h2>
+          <p className="muted mt-1 text-sm">
+            Interchangeable categories of enterprise services. Connectors attach
+            to a project under one of these.
+          </p>
+          <div className="grid-cards mt-4">
+            {Object.entries(LAYER_LABELS).map(([kind, label]) => (
+              <div key={kind} className="card flex items-center gap-3">
+                <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-panel-2 text-muted">
+                  <LayerIcon kind={kind as LayerKind} size={18} />
+                </span>
+                <div className="min-w-0">
+                  <strong className="block truncate text-text">{label}</strong>
+                  <span className="muted text-[13px]">{kind}</span>
                 </div>
               </div>
             ))}
           </div>
-        )}
-      </section>
+        </section>
 
-      <footer
-        className="muted"
-        style={{
-          marginTop: 64,
-          paddingTop: 24,
-          borderTop: "1px solid var(--border)",
-          display: "flex",
-          justifyContent: "space-between",
-          fontSize: 13,
-        }}
-      >
-        <span>ORBIT — open source enterprise orchestrator.</span>
-        <span style={{ display: "flex", gap: 16 }}>
-          <a href="https://github.com">GitHub</a>
-          <a href="/docs">Docs</a>
-        </span>
-      </footer>
-    </main>
+        <section className="pb-4">
+          <h2 className="text-xl">Supported integrations</h2>
+          <p className="muted mt-1 text-sm">
+            Connectors available out of the box. Configure them per project once
+            you sign in.
+          </p>
+          {connectors.length === 0 ? (
+            <div className="card mt-4">
+              <p className="muted m-0 text-sm">No connectors registered yet.</p>
+            </div>
+          ) : (
+            <div className="grid-cards mt-4">
+              {connectors.map((c) => (
+                <div key={c.type} className="card card-hover">
+                  <div className="flex items-center justify-between">
+                    <BrandIcon slug={c.icon} />
+                    <span className="badge">{c.layer}</span>
+                  </div>
+                  <h3 className="mb-0.5 mt-2.5 text-base">{c.displayName}</h3>
+                  <p className="muted m-0 text-[13px]">{c.description}</p>
+                  <div className="muted mt-2 text-xs">
+                    {c.capabilities} capabilities · {c.apiOperations} API ops
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <footer className="muted mt-16 flex justify-between border-t border-border py-6 text-[13px]">
+          <span>ORBIT — open source enterprise orchestrator.</span>
+          <span className="flex gap-4">
+            <a href="https://github.com">GitHub</a>
+            <a href="/docs">Docs</a>
+          </span>
+        </footer>
+      </main>
+    </div>
   );
 }

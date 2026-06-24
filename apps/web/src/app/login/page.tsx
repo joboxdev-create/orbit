@@ -18,65 +18,69 @@ export default async function LoginPage({
   const { error } = await searchParams;
 
   return (
-    <main className="container" style={{ maxWidth: 420 }}>
-      <header style={{ margin: "48px 0 24px" }}>
-        <div style={{ marginBottom: 16 }}>
-          <Logo size={56} wordmark={false} href="/" />
-        </div>
-        <h1 style={{ margin: 0 }}>Sign in to ORBIT</h1>
-        <p className="muted" style={{ marginTop: 4 }}>
-          Use your ORBIT account. Accounts are provisioned by an administrator.
-        </p>
-      </header>
+    <main className="flex min-h-screen items-center justify-center px-6 py-12">
+      <div className="w-full max-w-sm">
+        <header className="mb-6">
+          <div className="mb-4">
+            <Logo size={56} wordmark={false} href="/" />
+          </div>
+          <h1 className="m-0 text-2xl">Sign in to ORBIT</h1>
+          <p className="muted mt-1.5 text-sm">
+            Use your ORBIT account. Accounts are provisioned by an administrator.
+          </p>
+        </header>
 
-      {error ? (
-        <div
-          className="card"
-          style={{ borderColor: "#b91c1c", marginBottom: 16 }}
-        >
-          <p style={{ margin: 0, color: "#b91c1c" }}>Invalid email or password.</p>
-        </div>
-      ) : null}
+        {error ? (
+          <div className="card mb-4 border-danger/50">
+            <p className="m-0 text-sm text-danger">Invalid email or password.</p>
+          </div>
+        ) : null}
 
-      <form
-        action={async (formData: FormData) => {
-          "use server";
-          try {
-            await signIn("credentials", {
-              email: formData.get("email"),
-              password: formData.get("password"),
-              redirectTo: "/dashboard",
-            });
-          } catch (err) {
-            if (err instanceof AuthError) {
-              redirect("/login?error=CredentialsSignin");
+        <form
+          action={async (formData: FormData) => {
+            "use server";
+            try {
+              await signIn("credentials", {
+                email: formData.get("email"),
+                password: formData.get("password"),
+                redirectTo: "/dashboard",
+              });
+            } catch (err) {
+              if (err instanceof AuthError) {
+                redirect("/login?error=CredentialsSignin");
+              }
+              throw err;
             }
-            throw err;
-          }
-        }}
-        style={{ display: "flex", flexDirection: "column", gap: 12 }}
-      >
-        <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-          <span className="muted" style={{ fontSize: 13 }}>
-            Email
-          </span>
-          <input name="email" type="email" required autoComplete="email" />
-        </label>
-        <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-          <span className="muted" style={{ fontSize: 13 }}>
-            Password
-          </span>
-          <input
-            name="password"
-            type="password"
-            required
-            autoComplete="current-password"
-          />
-        </label>
-        <button type="submit" className="badge" style={{ cursor: "pointer" }}>
-          Sign in
-        </button>
-      </form>
+          }}
+          className="flex flex-col gap-4"
+        >
+          <label className="field">
+            <span className="field-label">Email</span>
+            <input
+              className="input"
+              name="email"
+              type="email"
+              required
+              autoComplete="email"
+              placeholder="you@company.com"
+            />
+          </label>
+          <label className="field">
+            <span className="field-label">Password</span>
+            <input
+              className="input"
+              name="password"
+              type="password"
+              required
+              autoComplete="current-password"
+              placeholder="••••••••"
+            />
+          </label>
+          <button type="submit" className="btn btn-primary w-full">
+            Sign in
+          </button>
+        </form>
+      </div>
     </main>
   );
 }
