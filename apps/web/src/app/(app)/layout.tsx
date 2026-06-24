@@ -4,23 +4,14 @@ import { auth } from "@/shared/auth";
 import { Navbar } from "@/common/app-shell/navbar";
 import { Sidebar } from "@/common/app-shell/sidebar";
 
-/**
- * Shell for everything behind auth: a fixed navbar, a fixed left sidebar, and a
- * scrolling content area. The auth gate lives here so every nested page is
- * protected by a single check.
- */
-export default async function AppLayout({
-  children,
-}: {
-  children: ReactNode;
-}) {
+export default async function AppLayout({ children }: { children: ReactNode }) {
   const session = await auth();
   if (!session?.user) redirect("/login");
 
   return (
-    <div className="min-h-screen bg-bg">
+    <div className="min-h-screen bg-background">
       <Navbar />
-      <aside className="fixed bottom-0 left-0 top-14 hidden w-60 border-r border-border bg-panel/40 md:block">
+      <aside className="fixed bottom-0 left-0 top-14 hidden w-60 border-r border-border bg-card md:block">
         <Sidebar />
       </aside>
       <main className="pt-14 md:pl-60">{children}</main>

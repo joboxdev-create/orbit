@@ -11,12 +11,10 @@ import { Breadcrumb } from "@/common/app-shell/breadcrumb";
 import { PageHeader, PageShell } from "@/common/app-shell/page-shell";
 import { LayerIcon } from "@/common/layer-icon";
 import { BrandIcon } from "@/common/brand-icon";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
 
-/**
- * Project detail: the connected services grouped by Layer, with the catalog of
- * connectors still available to attach. This is where the top-down model bottoms
- * out into concrete integrations.
- */
 export default async function ProjectPage({
   params,
 }: {
@@ -31,7 +29,6 @@ export default async function ProjectPage({
   if (!project) notFound();
   const org = await getOrganization(project.orgId);
 
-  // Group connected instances by layer for the layer-first view.
   const byLayer = new Map<string, ConnectorInstance[]>();
   for (const inst of instances) {
     const list = byLayer.get(inst.layer) ?? [];
@@ -40,13 +37,7 @@ export default async function ProjectPage({
   }
 
   return (
-    <PageShell
-      index={[
-        { id: "layers", label: "Layers" },
-        { id: "connected", label: "Connected" },
-        { id: "available", label: "Available" },
-      ]}
-    >
+    <PageShell>
       <PageHeader
         breadcrumb={
           <Breadcrumb
@@ -61,101 +52,112 @@ export default async function ProjectPage({
         description={project.description ?? `Project · ${project.slug}`}
       />
 
-      <section id="layers" className="scroll-mt-20">
-        <h2 className="text-lg">Layers</h2>
-        <p className="muted mt-1 text-sm">
-          Categories of services this project can connect. The badge shows how
-          many connectors are attached under each.
-        </p>
-        <div className="grid-cards mt-4">
+      <section className="space-y-4">
+        <h2 className="text-lg font-semibold tracking-tight">Layers</h2>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {Object.entries(LAYER_LABELS).map(([kind, label]) => {
             const count = byLayer.get(kind)?.length ?? 0;
             return (
-              <div key={kind} className="card flex items-center gap-3">
+              <div
+                key={kind}
+                className="flex items-center gap-3 rounded-lg border border-border bg-card p-4"
+              >
                 <span
                   className={`flex size-9 shrink-0 items-center justify-center rounded-lg ${
                     count > 0
-                      ? "bg-accent/12 text-accent"
-                      : "bg-panel-2 text-muted"
+                      ? "bg-primary/10 text-primary"
+                      : "bg-muted text-muted-foreground"
                   }`}
                 >
                   <LayerIcon kind={kind as LayerKind} size={18} />
                 </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate font-medium text-text">
-                    {label}
-                  </span>
-                  <span className="muted block text-[13px]">
-                    {count === 0
-                      ? "Not connected"
-                      : `${count} connected`}
-                  </span>
-                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-medium">{label}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {count === 0 ? "Not connected" : `${count} connected`}
+                  </p>
+                </div>
               </div>
             );
           })}
         </div>
       </section>
 
-      <section id="connected" className="scroll-mt-20">
-        <h2 className="text-lg">Connected services</h2>
+      <Separator />
+
+      <section className="space-y-4">
+        <h2 className="text-lg font-semibold tracking-tight">
+          Connected services
+        </h2>
         {instances.length === 0 ? (
-          <div className="card mt-4">
-            <p className="muted m-0 text-sm">
-              Nothing connected yet. Connector instances are configured through
-              the core API for now (encrypted credentials per project).
-            </p>
-          </div>
+          <Card>
+            <CardContent className="py-6">
+              <p className="text-sm text-muted-foreground">
+                Nothing connected yet. Connector instances are configured
+                through the core API.
+              </p>
+            </CardContent>
+          </Card>
         ) : (
-          <div className="grid-cards mt-4">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {instances.map((inst) => (
-              <div key={inst.id} className="card">
-                <div className="flex items-center justify-between">
-                  <BrandIcon slug={catalogIcon(catalog, inst.connectorType)} />
-                  <span className="badge">{inst.layer}</span>
-                </div>
-                <h3 className="mb-0.5 mt-2.5 text-base">{inst.name}</h3>
-                <p className="muted m-0 text-[13px]">{inst.connectorType}</p>
-                <span
-                  className={`mt-2 inline-flex items-center gap-1.5 text-xs ${
-                    inst.status === "active" ? "text-accent" : "text-muted"
-                  }`}
-                >
-                  <span className="size-1.5 rounded-full bg-current" />
-                  {inst.status}
-                </span>
-              </div>
+              <Card key={inst.id}>
+                <CardHeader className="pb-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <BrandIcon
+                      slug={
+                        catalog.find((c) => c.type === inst.connectorType)
+                          ?.icon ?? null
+                      }
+                    />
+                    <Badge variant="secondary">{inst.layer}</Badge>
+                  </div>
+                  <CardTitle className="text-base">{inst.name}</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-xs text-muted-foreground">
+                    {inst.connectorType}
+                  </p>
+                  <div className="mt-2 flex items-center gap-1.5 text-xs">
+                    <span
+                      className={`size-1.5 rounded-full ${
+                        inst.status === "active"
+                          ? "bg-green-500"
+                          : "bg-muted-foreground"
+                      }`}
+                    />
+                    <span className="text-muted-foreground">{inst.status}</span>
+                  </div>
+                </CardContent>
+              </Card>
             ))}
           </div>
         )}
       </section>
 
-      <section id="available" className="scroll-mt-20">
-        <h2 className="text-lg">Available connectors</h2>
-        <p className="muted mt-1 text-sm">
-          Connector types you can attach to this project.
-        </p>
-        <div className="grid-cards mt-4">
+      <Separator />
+
+      <section className="space-y-4">
+        <h2 className="text-lg font-semibold tracking-tight">
+          Available connectors
+        </h2>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {catalog.map((c) => (
-            <div key={c.type} className="card">
-              <div className="flex items-center justify-between">
-                <BrandIcon slug={c.icon} />
-                <span className="badge">{c.layer}</span>
-              </div>
-              <h3 className="mb-0.5 mt-2.5 text-base">{c.displayName}</h3>
-              <p className="muted m-0 text-[13px]">{c.description}</p>
-            </div>
+            <Card key={c.type}>
+              <CardHeader className="pb-2">
+                <div className="flex items-start justify-between gap-2">
+                  <BrandIcon slug={c.icon} />
+                  <Badge variant="secondary">{c.layer}</Badge>
+                </div>
+                <CardTitle className="text-base">{c.displayName}</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-xs text-muted-foreground">{c.description}</p>
+              </CardContent>
+            </Card>
           ))}
         </div>
       </section>
     </PageShell>
   );
-}
-
-/** Best-effort brand icon for a connected instance, via the catalog entry. */
-function catalogIcon(
-  catalog: { type: string; icon: string | null }[],
-  type: string,
-): string | null {
-  return catalog.find((c) => c.type === type)?.icon ?? null;
 }

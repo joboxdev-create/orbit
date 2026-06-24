@@ -1,28 +1,19 @@
 import Link from "next/link";
-import { notFound, redirect } from "next/navigation";
-import { revalidatePath } from "next/cache";
-import { ArrowRight, FolderGit2, Plus } from "lucide-react";
-import {
-  createProject,
-  getOrganization,
-  getProjects,
-} from "@/shared/api";
+import { notFound } from "next/navigation";
+import { ArrowRight, FolderGit2 } from "lucide-react";
+import { getOrganization, getProjects } from "@/shared/api";
 import { Breadcrumb } from "@/common/app-shell/breadcrumb";
 import { PageHeader, PageShell } from "@/common/app-shell/page-shell";
+import { Card, CardContent } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
+import { CreateProjectForm } from "./form";
 
-/**
- * Organization detail: the projects under a group, plus an inline form to add
- * one. Each project drills into its layers and connectors.
- */
 export default async function OrgPage({
   params,
-  searchParams,
 }: {
   params: Promise<{ orgId: string }>;
-  searchParams: Promise<{ error?: string }>;
 }) {
   const { orgId } = await params;
-  const { error } = await searchParams;
   const [org, projects] = await Promise.all([
     getOrganization(orgId),
     getProjects(orgId),
@@ -30,12 +21,7 @@ export default async function OrgPage({
   if (!org) notFound();
 
   return (
-    <PageShell
-      index={[
-        { id: "projects", label: "Projects" },
-        { id: "new-project", label: "New project" },
-      ]}
-    >
+    <PageShell>
       <PageHeader
         breadcrumb={
           <Breadcrumb
@@ -49,41 +35,38 @@ export default async function OrgPage({
         description={`Organization · ${org.slug}`}
       />
 
-      <section id="projects" className="scroll-mt-20">
-        <h2 className="text-lg">Projects</h2>
-        <p className="muted mt-1 text-sm">
-          A project groups the connected services for one initiative, organized
-          by layer.
-        </p>
-
+      <section className="space-y-4">
+        <h2 className="text-lg font-semibold tracking-tight">Projects</h2>
         {projects.length === 0 ? (
-          <div className="card mt-4">
-            <p className="muted m-0 text-sm">
-              No projects yet. Create the first one below.
-            </p>
-          </div>
+          <Card>
+            <CardContent className="py-6">
+              <p className="text-sm text-muted-foreground">
+                No projects yet. Create the first one below.
+              </p>
+            </CardContent>
+          </Card>
         ) : (
-          <div className="grid-cards mt-4">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {projects.map((project) => (
               <Link
                 key={project.id}
                 href={`/orgs/${orgId}/projects/${project.id}`}
-                className="card card-hover group flex items-center gap-3 no-underline"
+                className="group flex items-center gap-3 rounded-lg border border-border bg-card p-4 transition-colors hover:border-border/80 hover:bg-accent/5"
               >
-                <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-accent/12 text-accent">
+                <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
                   <FolderGit2 size={18} />
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate font-medium text-text">
+                  <span className="block truncate font-medium">
                     {project.name}
                   </span>
-                  <span className="muted block truncate text-[13px]">
+                  <span className="block truncate text-xs text-muted-foreground">
                     {project.slug}
                   </span>
                 </span>
                 <ArrowRight
                   size={16}
-                  className="text-muted transition-transform group-hover:translate-x-0.5 group-hover:text-accent"
+                  className="text-muted-foreground transition-transform group-hover:translate-x-0.5"
                 />
               </Link>
             ))}
@@ -91,59 +74,11 @@ export default async function OrgPage({
         )}
       </section>
 
-      <section id="new-project" className="scroll-mt-20">
-        <h2 className="text-lg">New project</h2>
-        {error ? <p className="mt-2 text-[13px] text-danger">{error}</p> : null}
-        <form
-          action={async (formData: FormData) => {
-            "use server";
-            const result = await createProject({
-              orgId,
-              name: String(formData.get("name") ?? ""),
-              slug: String(formData.get("slug") ?? ""),
-              description: String(formData.get("description") ?? "") || undefined,
-            });
-            if (!result.ok) {
-              redirect(
-                `/orgs/${orgId}?error=${encodeURIComponent(result.error)}`,
-              );
-            }
-            revalidatePath(`/orgs/${orgId}`);
-          }}
-          className="card mt-4 flex flex-wrap items-end gap-4"
-        >
-          <label className="field min-w-[160px] flex-1">
-            <span className="field-label">Name</span>
-            <input
-              className="input"
-              name="name"
-              required
-              placeholder="Platform"
-            />
-          </label>
-          <label className="field min-w-[160px] flex-1">
-            <span className="field-label">Slug</span>
-            <input
-              className="input"
-              name="slug"
-              required
-              placeholder="platform"
-              pattern="[a-z0-9]+(?:-[a-z0-9]+)*"
-            />
-          </label>
-          <label className="field min-w-full">
-            <span className="field-label">Description (optional)</span>
-            <input
-              className="input"
-              name="description"
-              placeholder="What this project covers"
-            />
-          </label>
-          <button type="submit" className="btn btn-primary">
-            <Plus size={16} />
-            Create project
-          </button>
-        </form>
+      <Separator />
+
+      <section className="space-y-4">
+        <h2 className="text-lg font-semibold tracking-tight">New project</h2>
+        <CreateProjectForm orgId={orgId} />
       </section>
     </PageShell>
   );

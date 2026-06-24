@@ -1,7 +1,8 @@
 import { LogOut } from "lucide-react";
 import { auth, signOut } from "@/shared/auth";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
 
-/** Compact account control for the navbar: identity + sign out. */
 export async function UserMenu() {
   const session = await auth();
   if (!session?.user) return null;
@@ -12,13 +13,10 @@ export async function UserMenu() {
   return (
     <div className="flex items-center gap-3">
       <div className="hidden items-center gap-2 sm:flex">
-        <span
-          className="flex size-7 items-center justify-center rounded-full bg-accent/15 text-xs font-semibold text-accent"
-          aria-hidden
-        >
-          {initial}
-        </span>
-        <span className="text-sm text-muted">{label}</span>
+        <Avatar className="size-7">
+          <AvatarFallback className="text-xs">{initial}</AvatarFallback>
+        </Avatar>
+        <span className="text-sm text-muted-foreground">{label}</span>
       </div>
       <form
         action={async () => {
@@ -26,10 +24,10 @@ export async function UserMenu() {
           await signOut({ redirectTo: "/" });
         }}
       >
-        <button type="submit" className="btn btn-sm" title="Sign out">
+        <Button type="submit" variant="ghost" size="sm">
           <LogOut size={15} />
           <span className="hidden sm:inline">Sign out</span>
-        </button>
+        </Button>
       </form>
     </div>
   );

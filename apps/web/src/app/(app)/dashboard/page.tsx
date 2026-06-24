@@ -1,88 +1,70 @@
 import Link from "next/link";
+import { ArrowRight, Building2 } from "lucide-react";
 import { redirect } from "next/navigation";
-import { revalidatePath } from "next/cache";
-import { ArrowRight, Building2, Plus } from "lucide-react";
 import { auth } from "@/shared/auth";
-import { createOrganization, getMe, getOrganizations } from "@/shared/api";
+import { getOrganizations } from "@/shared/api";
 import { PageHeader, PageShell } from "@/common/app-shell/page-shell";
+import { Card, CardContent } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
+import { CreateOrgForm } from "./form";
 
-/**
- * Workspace home: the organizations the user owns, the entry point into the
- * Organization → Project → Layer → Connector hierarchy. Admin-only for now;
- * per-org access for regular users comes later.
- */
-export default async function DashboardPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ error?: string }>;
-}) {
+export default async function DashboardPage() {
   const session = await auth();
-  // The (app) layout already guarantees a session.
   if (session!.user.platformRole !== "admin") {
     return (
       <PageShell>
         <PageHeader title="Dashboard" />
-        <div className="card max-w-lg">
-          <h2 className="mt-0 text-lg">No access yet</h2>
-          <p className="muted mb-0 text-sm">
-            Your account isn’t a platform admin. Access for regular users is
-            coming soon.
-          </p>
-        </div>
+        <Card>
+          <CardContent className="py-6">
+            <p className="text-sm text-muted-foreground">
+              Your account isn't a platform admin. Access for regular users is
+              coming soon.
+            </p>
+          </CardContent>
+        </Card>
       </PageShell>
     );
   }
 
-  const { error } = await searchParams;
-  const [me, organizations] = await Promise.all([getMe(), getOrganizations()]);
+  const organizations = await getOrganizations();
 
   return (
-    <PageShell
-      index={[
-        { id: "organizations", label: "Organizations" },
-        { id: "new-organization", label: "New organization" },
-      ]}
-    >
+    <PageShell>
       <PageHeader
         title="Dashboard"
-        description={`Signed in as ${me?.email ?? session!.user.email} · ${me?.platformRole}`}
+        description="Organizations you manage on this ORBIT instance."
       />
 
-      <section id="organizations" className="scroll-mt-20">
-        <h2 className="text-lg">Organizations</h2>
-        <p className="muted mt-1 text-sm">
-          The top of the model: an organization holds projects, which hold
-          connector instances.
-        </p>
-
+      <section className="space-y-4">
+        <h2 className="text-lg font-semibold tracking-tight">Organizations</h2>
         {organizations.length === 0 ? (
-          <div className="card mt-4">
-            <p className="muted m-0 text-sm">
-              No organizations yet. Create your first one below.
-            </p>
-          </div>
+          <Card>
+            <CardContent className="py-6">
+              <p className="text-sm text-muted-foreground">
+                No organizations yet. Create your first one below.
+              </p>
+            </CardContent>
+          </Card>
         ) : (
-          <div className="grid-cards mt-4">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {organizations.map((org) => (
               <Link
                 key={org.id}
                 href={`/orgs/${org.id}`}
-                className="card card-hover group flex items-center gap-3 no-underline"
+                className="group flex items-center gap-3 rounded-lg border border-border bg-card p-4 transition-colors hover:border-border/80 hover:bg-accent/5"
               >
-                <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-accent/12 text-accent">
+                <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
                   <Building2 size={18} />
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate font-medium text-text">
-                    {org.name}
-                  </span>
-                  <span className="muted block truncate text-[13px]">
+                  <span className="block truncate font-medium">{org.name}</span>
+                  <span className="block truncate text-xs text-muted-foreground">
                     {org.slug}
                   </span>
                 </span>
                 <ArrowRight
                   size={16}
-                  className="text-muted transition-transform group-hover:translate-x-0.5 group-hover:text-accent"
+                  className="text-muted-foreground transition-transform group-hover:translate-x-0.5"
                 />
               </Link>
             ))}
@@ -90,44 +72,13 @@ export default async function DashboardPage({
         )}
       </section>
 
-      <section id="new-organization" className="scroll-mt-20">
-        <h2 className="text-lg">New organization</h2>
-        {error ? (
-          <p className="mt-2 text-[13px] text-danger">{error}</p>
-        ) : null}
-        <form
-          action={async (formData: FormData) => {
-            "use server";
-            const result = await createOrganization({
-              name: String(formData.get("name") ?? ""),
-              slug: String(formData.get("slug") ?? ""),
-            });
-            if (!result.ok) {
-              redirect(`/dashboard?error=${encodeURIComponent(result.error)}`);
-            }
-            revalidatePath("/dashboard");
-          }}
-          className="card mt-4 flex flex-wrap items-end gap-4"
-        >
-          <label className="field min-w-[180px] flex-1">
-            <span className="field-label">Name</span>
-            <input className="input" name="name" required placeholder="Acme Inc" />
-          </label>
-          <label className="field min-w-[180px] flex-1">
-            <span className="field-label">Slug</span>
-            <input
-              className="input"
-              name="slug"
-              required
-              placeholder="acme"
-              pattern="[a-z0-9]+(?:-[a-z0-9]+)*"
-            />
-          </label>
-          <button type="submit" className="btn btn-primary">
-            <Plus size={16} />
-            Create organization
-          </button>
-        </form>
+      <Separator />
+
+      <section className="space-y-4">
+        <h2 className="text-lg font-semibold tracking-tight">
+          New organization
+        </h2>
+        <CreateOrgForm />
       </section>
     </PageShell>
   );

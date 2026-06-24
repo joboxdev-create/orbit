@@ -2,12 +2,10 @@ import { redirect } from "next/navigation";
 import { AuthError } from "next-auth";
 import { auth, signIn } from "@/shared/auth";
 import { Logo } from "@/common/logo";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
-/**
- * Email/password sign-in against ORBIT's own identity store. There is no public
- * sign-up: accounts are created by an admin. The bootstrap admin (seeded from
- * env) is the first account able to log in.
- */
 export default async function LoginPage({
   searchParams,
 }: {
@@ -19,24 +17,26 @@ export default async function LoginPage({
 
   return (
     <main className="flex min-h-screen items-center justify-center px-6 py-12">
-      <div className="w-full max-w-sm">
-        <header className="mb-6">
-          <div className="mb-4">
-            <Logo size={56} wordmark={false} href="/" />
-          </div>
-          <h1 className="m-0 text-2xl">Sign in to ORBIT</h1>
-          <p className="muted mt-1.5 text-sm">
-            Use your ORBIT account. Accounts are provisioned by an administrator.
+      <div className="w-full max-w-sm space-y-6">
+        <div className="space-y-2">
+          <Logo size={48} wordmark={false} href="/" />
+          <h1 className="text-2xl font-semibold tracking-tight">
+            Sign in to ORBIT
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            Use your ORBIT account. Accounts are provisioned by an
+            administrator.
           </p>
-        </header>
+        </div>
 
-        {error ? (
-          <div className="card mb-4 border-danger/50">
-            <p className="m-0 text-sm text-danger">Invalid email or password.</p>
-          </div>
-        ) : null}
+        {error && (
+          <p className="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            Invalid email or password.
+          </p>
+        )}
 
         <form
+          className="space-y-4"
           action={async (formData: FormData) => {
             "use server";
             try {
@@ -47,38 +47,37 @@ export default async function LoginPage({
               });
             } catch (err) {
               if (err instanceof AuthError) {
-                redirect("/login?error=CredentialsSignin");
+                redirect("/login?error=1");
               }
               throw err;
             }
           }}
-          className="flex flex-col gap-4"
         >
-          <label className="field">
-            <span className="field-label">Email</span>
-            <input
-              className="input"
+          <div className="space-y-1.5">
+            <Label htmlFor="email">Email</Label>
+            <Input
+              id="email"
               name="email"
               type="email"
               required
               autoComplete="email"
               placeholder="you@company.com"
             />
-          </label>
-          <label className="field">
-            <span className="field-label">Password</span>
-            <input
-              className="input"
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="password">Password</Label>
+            <Input
+              id="password"
               name="password"
               type="password"
               required
               autoComplete="current-password"
               placeholder="••••••••"
             />
-          </label>
-          <button type="submit" className="btn btn-primary w-full">
+          </div>
+          <Button type="submit" className="w-full">
             Sign in
-          </button>
+          </Button>
         </form>
       </div>
     </main>

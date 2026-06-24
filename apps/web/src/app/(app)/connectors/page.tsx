@@ -3,12 +3,9 @@ import { LAYER_LABELS, type LayerKind } from "@orbit/shared";
 import { getConnectors } from "@/shared/api";
 import { PageHeader, PageShell } from "@/common/app-shell/page-shell";
 import { BrandIcon } from "@/common/brand-icon";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
-/**
- * Global catalog of connector types. Optionally filtered by ?layer=<kind> —
- * the sidebar layer entries link here. Keycloak appears as a connector (data
- * plane), not as the login system.
- */
 export default async function ConnectorsPage({
   searchParams,
 }: {
@@ -21,59 +18,56 @@ export default async function ConnectorsPage({
     : connectors;
 
   return (
-    <PageShell index={[{ id: "catalog", label: "Catalog" }]}>
+    <PageShell>
       <PageHeader
         title="Connectors"
         description="Connector types available out of the box. Configure them per project, with credentials encrypted at rest."
       />
 
       <div className="flex flex-wrap gap-2">
-        <Link
-          href="/connectors"
-          className={`badge ${layer ? "" : "border-accent text-text"}`}
-        >
-          All
+        <Link href="/connectors">
+          <Badge variant={!layer ? "default" : "outline"}>All</Badge>
         </Link>
         {Object.entries(LAYER_LABELS).map(([kind, label]) => (
-          <Link
-            key={kind}
-            href={`/connectors?layer=${kind}`}
-            className={`badge ${
-              layer === kind ? "border-accent text-text" : ""
-            }`}
-          >
-            {label}
+          <Link key={kind} href={`/connectors?layer=${kind}`}>
+            <Badge variant={layer === kind ? "default" : "outline"}>
+              {label}
+            </Badge>
           </Link>
         ))}
       </div>
 
-      <section id="catalog" className="scroll-mt-20">
-        {filtered.length === 0 ? (
-          <div className="card">
-            <p className="muted m-0 text-sm">
+      {filtered.length === 0 ? (
+        <Card>
+          <CardContent className="py-6">
+            <p className="text-sm text-muted-foreground">
               {layer
-                ? `No connectors registered for ${LAYER_LABELS[layer as LayerKind] ?? layer} yet.`
+                ? `No connectors for ${LAYER_LABELS[layer as LayerKind] ?? layer} yet.`
                 : "No connectors registered yet."}
             </p>
-          </div>
-        ) : (
-          <div className="grid-cards">
-            {filtered.map((c) => (
-              <div key={c.type} className="card card-hover">
-                <div className="flex items-center justify-between">
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {filtered.map((c) => (
+            <Card key={c.type}>
+              <CardHeader className="pb-2">
+                <div className="flex items-start justify-between gap-2">
                   <BrandIcon slug={c.icon} />
-                  <span className="badge">{c.layer}</span>
+                  <Badge variant="secondary">{c.layer}</Badge>
                 </div>
-                <h3 className="mb-0.5 mt-2.5 text-base">{c.displayName}</h3>
-                <p className="muted m-0 text-[13px]">{c.description}</p>
-                <div className="muted mt-2 text-xs">
+                <CardTitle className="text-base">{c.displayName}</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-xs text-muted-foreground">{c.description}</p>
+                <p className="mt-2 text-xs text-muted-foreground">
                   {c.capabilities} capabilities · {c.apiOperations} API ops
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
+                </p>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
     </PageShell>
   );
 }

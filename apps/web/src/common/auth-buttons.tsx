@@ -1,37 +1,39 @@
 import Link from "next/link";
 import { LayoutDashboard, LogOut } from "lucide-react";
 import { auth, signOut } from "@/shared/auth";
+import { Button } from "@/components/ui/button";
 
-/** Server-rendered sign-in / sign-out controls backed by Auth.js server actions. */
 export async function AuthControls() {
   const session = await auth();
 
   if (!session?.user) {
     return (
-      <Link href="/login" className="btn btn-sm">
-        Sign in
-      </Link>
+      <Button asChild variant="outline" size="sm">
+        <Link href="/login">Sign in</Link>
+      </Button>
     );
   }
 
   return (
-    <div className="flex items-center gap-3">
-      <span className="muted hidden text-sm sm:inline">
+    <div className="flex items-center gap-2">
+      <span className="hidden text-sm text-muted-foreground sm:inline">
         {session.user.email ?? session.user.name}
       </span>
-      <Link href="/dashboard" className="btn btn-sm btn-primary">
-        <LayoutDashboard size={15} />
-        Dashboard
-      </Link>
+      <Button asChild size="sm">
+        <Link href="/dashboard">
+          <LayoutDashboard size={15} />
+          Dashboard
+        </Link>
+      </Button>
       <form
         action={async () => {
           "use server";
           await signOut({ redirectTo: "/" });
         }}
       >
-        <button type="submit" className="btn btn-sm" title="Sign out">
+        <Button type="submit" variant="ghost" size="icon">
           <LogOut size={15} />
-        </button>
+        </Button>
       </form>
     </div>
   );
