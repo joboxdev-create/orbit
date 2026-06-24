@@ -1,5 +1,20 @@
-import { Body, Controller, Get, Post } from "@nestjs/common";
-import { CreateUserInput, LoginInput, RefreshInput } from "@orbit/shared";
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Patch,
+  Post,
+} from "@nestjs/common";
+import {
+  CreateUserInput,
+  LoginInput,
+  RefreshInput,
+  UpdateUserInput,
+} from "@orbit/shared";
 import { ZodValidationPipe } from "../../common/zod-validation.pipe";
 import { AuthService } from "./auth.service";
 import { CurrentUser, Public, Roles } from "./decorators";
@@ -21,13 +36,40 @@ export class AuthController {
     return this.auth.refresh(body.refreshToken);
   }
 
-  // Admin-managed user creation (no public self-registration).
   @Roles("admin")
   @Post("users")
   createUser(
     @Body(new ZodValidationPipe(CreateUserInput)) body: CreateUserInput,
   ) {
     return this.auth.createUser(body);
+  }
+
+  @Roles("admin")
+  @Get("users")
+  listUsers() {
+    return this.auth.listUsers();
+  }
+
+  @Roles("admin")
+  @Get("users/:id")
+  getUser(@Param("id") id: string) {
+    return this.auth.getUser(id);
+  }
+
+  @Roles("admin")
+  @Patch("users/:id")
+  updateUser(
+    @Param("id") id: string,
+    @Body(new ZodValidationPipe(UpdateUserInput)) body: UpdateUserInput,
+  ) {
+    return this.auth.updateUser(id, body);
+  }
+
+  @Roles("admin")
+  @Delete("users/:id")
+  @HttpCode(HttpStatus.NO_CONTENT)
+  deleteUser(@CurrentUser() actor: AuthUser, @Param("id") id: string) {
+    return this.auth.deleteUser(actor.userId, id);
   }
 
   @Get("me")

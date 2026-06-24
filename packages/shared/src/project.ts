@@ -18,3 +18,13 @@ export const CreateProject = Project.pick({
   description: true,
 });
 export type CreateProject = z.infer<typeof CreateProject>;
+
+export const UpdateProject = Project.pick({
+  name: true,
+  slug: true,
+  description: true,
+}).partial().refine(
+  (v) => Object.keys(v).length > 0,
+  { message: "At least one field must be provided" },
+);
+export type UpdateProject = z.infer<typeof UpdateProject>;

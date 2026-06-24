@@ -16,3 +16,9 @@ export type Organization = z.infer<typeof Organization>;
 
 export const CreateOrganization = Organization.pick({ name: true, slug: true });
 export type CreateOrganization = z.infer<typeof CreateOrganization>;
+
+export const UpdateOrganization = CreateOrganization.partial().refine(
+  (v) => Object.keys(v).length > 0,
+  { message: "At least one field must be provided" },
+);
+export type UpdateOrganization = z.infer<typeof UpdateOrganization>;

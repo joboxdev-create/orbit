@@ -1,35 +1,71 @@
 import { z } from "zod";
 
 /**
- * A Layer is a category of interchangeable enterprise services.
- * Every connector declares which layer it belongs to, so a project
- * can show its infrastructure grouped by concern.
+ * A Layer is a category of interchangeable enterprise services. Every connector
+ * declares which layer it belongs to, so a project can show its infrastructure
+ * grouped by concern. Layers are organised along the software lifecycle, the
+ * mental model used by enterprise internal developer portals (Backstage/Cortex):
+ *
+ *   SHIP        → repository, cicd
+ *   RUN         → hosting, orchestration, iac, database
+ *   OPERATE     → observability, security
+ *   COLLABORATE → task, docs, workspace, identity
+ *   AI          → model
+ *
+ * The enum order drives display order in the UI.
  */
 export const LayerKind = z.enum([
-  "server", // bare hosting: Aruba, Hetzner, OVH
-  "cloud", // AWS, GCP, Azure
-  "infra", // Kubernetes, Docker, Compose, Terraform
-  "repository", // Git, GitHub, GitLab
-  "task", // Jira and alternatives
-  "docs", // Confluence and alternatives
-  "test", // security / integration / external test services
-  "monitoring", // logs, metrics, alerting
-  "email", // Gmail and enterprise alternatives
-  "identity", // self-hosted auth (Keycloak, ...)
+  // ── SHIP ──────────────────────────────────────────────────────────────────
+  "repository", // Source control: GitHub, GitLab, Bitbucket
+  "cicd", // CI/CD pipelines: GitHub Actions, GitLab CI, Jenkins, CircleCI
+  // ── RUN ───────────────────────────────────────────────────────────────────
+  "hosting", // Cloud & bare hosting: AWS, GCP, Azure, Aruba, Hetzner, OVH
+  "orchestration", // Containers & orchestration: Kubernetes, Docker, Nomad
+  "iac", // Infrastructure as Code: Terraform, Pulumi, Ansible
+  "database", // Databases & data stores: Postgres, MySQL, Redis
+  // ── OPERATE ────────────────────────────────────────────────────────────────
+  "observability", // Logs, metrics, traces, alerting: Datadog, Grafana, Sentry
+  "security", // Security & secrets: Vault, Snyk, SonarQube
+  // ── COLLABORATE ────────────────────────────────────────────────────────────
+  "task", // Project management: Jira, Linear, Asana
+  "docs", // Documentation: Confluence, Notion
+  "workspace", // Workspace & communication: Google Workspace, M365, Slack, Teams
+  "identity", // Identity & access: Keycloak, Okta, Auth0
+  // ── AI ─────────────────────────────────────────────────────────────────────
   "model", // LLM providers: local (Ollama/LM Studio) or paid (Anthropic/OpenAI)
 ]);
 export type LayerKind = z.infer<typeof LayerKind>;
 
 export const LAYER_LABELS: Record<LayerKind, string> = {
-  server: "Server / Hosting",
-  cloud: "Cloud",
-  infra: "Infrastructure",
   repository: "Repository",
-  task: "Task Management",
+  cicd: "CI/CD",
+  hosting: "Cloud & Hosting",
+  orchestration: "Orchestration",
+  iac: "Infrastructure as Code",
+  database: "Databases",
+  observability: "Observability",
+  security: "Security & Secrets",
+  task: "Project Management",
   docs: "Documentation",
-  test: "Testing",
-  monitoring: "Monitoring",
-  email: "Email",
-  identity: "Identity",
+  workspace: "Workspace",
+  identity: "Identity & Access",
   model: "AI Models",
 };
+
+/**
+ * Macro-area each layer belongs to, for grouped rendering. Ordered to match the
+ * lifecycle. Optional for consumers that only need the flat list.
+ */
+export const LAYER_GROUPS = {
+  ship: { label: "Ship", layers: ["repository", "cicd"] },
+  run: { label: "Run", layers: ["hosting", "orchestration", "iac", "database"] },
+  operate: { label: "Operate", layers: ["observability", "security"] },
+  collaborate: {
+    label: "Collaborate",
+    layers: ["task", "docs", "workspace", "identity"],
+  },
+  ai: { label: "AI", layers: ["model"] },
+} as const satisfies Record<
+  string,
+  { label: string; layers: readonly LayerKind[] }
+>;

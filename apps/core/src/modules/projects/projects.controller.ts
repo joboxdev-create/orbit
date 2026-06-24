@@ -1,5 +1,16 @@
-import { Body, Controller, Get, Param, Post, Query } from "@nestjs/common";
-import { CreateProject } from "@orbit/shared";
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Patch,
+  Post,
+  Query,
+} from "@nestjs/common";
+import { CreateProject, UpdateProject } from "@orbit/shared";
 import { ZodValidationPipe } from "../../common/zod-validation.pipe";
 import { CurrentUser } from "../auth/decorators";
 import type { AuthUser } from "../auth/auth.types";
@@ -25,5 +36,20 @@ export class ProjectsController {
   @Get(":id")
   get(@CurrentUser() user: AuthUser, @Param("id") id: string) {
     return this.projects.findOne(user.userId, id);
+  }
+
+  @Patch(":id")
+  update(
+    @CurrentUser() user: AuthUser,
+    @Param("id") id: string,
+    @Body(new ZodValidationPipe(UpdateProject)) body: UpdateProject,
+  ) {
+    return this.projects.update(user.userId, id, body);
+  }
+
+  @Delete(":id")
+  @HttpCode(HttpStatus.NO_CONTENT)
+  remove(@CurrentUser() user: AuthUser, @Param("id") id: string) {
+    return this.projects.remove(user.userId, id);
   }
 }

@@ -20,6 +20,28 @@ export interface CreateInstanceInput {
   credentials: Record<string, unknown>;
 }
 
+export interface RegisterInstanceInput {
+  /** "catalog" = a code-backed connector from the registry; "custom" = a
+   *  user-declared service that has no live integration yet. */
+  source: "catalog" | "custom";
+  name: string;
+  /** Required when source is "catalog": the registry connector type id. */
+  connectorType?: string;
+  /** Required when source is "custom": the chosen layer category. */
+  layer?: string;
+  config: Record<string, unknown>;
+}
+
+export interface UpdateInstanceInput {
+  name?: string;
+  /** Only applied to custom instances (catalog ones derive layer from the def). */
+  layer?: string;
+  config?: Record<string, unknown>;
+}
+
+/** Sentinel connectorType for user-declared services without a code connector. */
+export const CUSTOM_CONNECTOR_TYPE = "custom";
+
 // Never return the encrypted blob to clients.
 const PUBLIC_FIELDS = {
   id: true,
@@ -89,6 +111,56 @@ export class ConnectorInstancesService {
     });
   }
 
+  /**
+   * Register a connector in a project without configuring credentials. This is
+   * the "catalogue it" step (status "configured"); wiring credentials, running
+   * testConnection and invoking capabilities is a separate, later step. Supports
+   * both catalog connectors (code-backed) and custom user-declared services.
+   */
+  async register(
+    userId: string,
+    projectId: string,
+    input: RegisterInstanceInput,
+  ) {
+    const project = await this.requireProject(projectId);
+    await this.acl.assertMember(userId, project.orgId, "member");
+
+    let connectorType: string;
+    let layer: string;
+
+    if (input.source === "catalog") {
+      if (!input.connectorType) {
+        throw new BadRequestException("connectorType is required for catalog connectors");
+      }
+      const def = this.registry.get(input.connectorType);
+      if (!def) {
+        throw new BadRequestException(
+          `Unknown connector type: ${input.connectorType}`,
+        );
+      }
+      connectorType = def.type;
+      layer = def.layer;
+    } else {
+      if (!input.layer) {
+        throw new BadRequestException("layer is required for custom connectors");
+      }
+      connectorType = CUSTOM_CONNECTOR_TYPE;
+      layer = input.layer;
+    }
+
+    return this.prisma.connectorInstance.create({
+      data: {
+        projectId,
+        connectorType,
+        layer,
+        name: input.name,
+        status: "configured",
+        config: input.config as Prisma.InputJsonValue,
+      },
+      select: PUBLIC_FIELDS,
+    });
+  }
+
   async list(userId: string, projectId: string) {
     const project = await this.requireProject(projectId);
     await this.acl.assertMember(userId, project.orgId);
@@ -97,6 +169,41 @@ export class ConnectorInstancesService {
       orderBy: { createdAt: "desc" },
       select: PUBLIC_FIELDS,
     });
+  }
+
+  async update(
+    userId: string,
+    instanceId: string,
+    input: UpdateInstanceInput,
+  ) {
+    const instance = await this.requireInstance(instanceId);
+    await this.acl.assertMember(userId, instance.project.orgId, "member");
+
+    const data: Prisma.ConnectorInstanceUpdateInput = {};
+    if (input.name !== undefined) data.name = input.name;
+    if (input.config !== undefined) {
+      data.config = input.config as Prisma.InputJsonValue;
+    }
+    // The layer of a catalog connector is fixed by its definition; only custom
+    // (user-declared) instances may change layer.
+    if (
+      input.layer !== undefined &&
+      instance.connectorType === CUSTOM_CONNECTOR_TYPE
+    ) {
+      data.layer = input.layer;
+    }
+
+    return this.prisma.connectorInstance.update({
+      where: { id: instanceId },
+      data,
+      select: PUBLIC_FIELDS,
+    });
+  }
+
+  async remove(userId: string, instanceId: string): Promise<void> {
+    const instance = await this.requireInstance(instanceId);
+    await this.acl.assertMember(userId, instance.project.orgId, "member");
+    await this.prisma.connectorInstance.delete({ where: { id: instanceId } });
   }
 
   /** Invoke a connector capability directly — the no-AI execution path. */
@@ -158,6 +265,17 @@ export class ConnectorInstancesService {
       throw new NotFoundException(`Project not found: ${projectId}`);
     }
     return project;
+  }
+
+  private async requireInstance(instanceId: string) {
+    const instance = await this.prisma.connectorInstance.findUnique({
+      where: { id: instanceId },
+      include: { project: { select: { orgId: true } } },
+    });
+    if (!instance) {
+      throw new NotFoundException(`Connector instance not found: ${instanceId}`);
+    }
+    return instance;
   }
 
   private parseOrThrow<T>(schema: ZodType, value: unknown, label: string): T {

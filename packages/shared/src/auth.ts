@@ -64,3 +64,13 @@ export interface AuthTokens {
   accessToken: string;
   refreshToken: string;
 }
+
+/** Input for an admin updating a user's profile or role. */
+export const UpdateUserInput = z.object({
+  name: z.string().min(1).max(120).optional(),
+  email: z.string().email().optional(),
+  platformRole: PlatformRole.optional(),
+  /** If provided, replaces the user's password. */
+  password: z.string().min(8).max(200).optional(),
+});
+export type UpdateUserInput = z.infer<typeof UpdateUserInput>;

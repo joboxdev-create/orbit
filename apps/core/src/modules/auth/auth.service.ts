@@ -1,8 +1,10 @@
 import {
+  BadRequestException,
   ConflictException,
   Inject,
   Injectable,
   Logger,
+  NotFoundException,
   type OnModuleInit,
   UnauthorizedException,
 } from "@nestjs/common";
@@ -15,6 +17,7 @@ import {
   type LoginInput,
   PLATFORM_ADMIN_ROLE,
   type PlatformRole,
+  type UpdateUserInput,
   type User,
 } from "@orbit/shared";
 import { PrismaService } from "../../shared/prisma/prisma.service";
@@ -36,12 +39,6 @@ export class AuthService implements OnModuleInit {
     private readonly identity: IdentityProvider,
   ) {}
 
-  /**
-   * Seed the bootstrap admin on startup. ORBIT owns its own identity (like
-   * Keycloak's admin or a database superuser): the first admin is provisioned
-   * from env, idempotently, so the platform is reachable before any user
-   * exists. Other users are then created by an admin (no public signup).
-   */
   async onModuleInit(): Promise<void> {
     const email = this.config.get<string>("ORBIT_ADMIN_EMAIL");
     const password = this.config.get<string>("ORBIT_ADMIN_PASSWORD");
@@ -65,17 +62,11 @@ export class AuthService implements OnModuleInit {
     this.logger.log(`Bootstrap admin provisioned: ${email}`);
   }
 
-  /**
-   * Create a user. There is no public self-registration: the controller gates
-   * this behind @Roles("admin"), so only a platform admin reaches it.
-   */
   async createUser(input: CreateUserInput): Promise<User> {
     const existing = await this.prisma.user.findUnique({
       where: { email: input.email },
     });
-    if (existing) {
-      throw new ConflictException("Email already registered");
-    }
+    if (existing) throw new ConflictException("Email already registered");
     const user = await this.prisma.user.create({
       data: {
         email: input.email,
@@ -86,6 +77,55 @@ export class AuthService implements OnModuleInit {
       },
     });
     return toPublicUser(user);
+  }
+
+  async listUsers(): Promise<User[]> {
+    const users = await this.prisma.user.findMany({
+      orderBy: { createdAt: "asc" },
+    });
+    return users.map(toPublicUser);
+  }
+
+  async getUser(id: string): Promise<User> {
+    const user = await this.prisma.user.findUnique({ where: { id } });
+    if (!user) throw new NotFoundException(`User not found: ${id}`);
+    return toPublicUser(user);
+  }
+
+  async updateUser(id: string, input: UpdateUserInput): Promise<User> {
+    const user = await this.prisma.user.findUnique({ where: { id } });
+    if (!user) throw new NotFoundException(`User not found: ${id}`);
+
+    if (input.email && input.email !== user.email) {
+      const taken = await this.prisma.user.findUnique({
+        where: { email: input.email },
+      });
+      if (taken) throw new ConflictException("Email already registered");
+    }
+
+    const updated = await this.prisma.user.update({
+      where: { id },
+      data: {
+        ...(input.name !== undefined && { name: input.name }),
+        ...(input.email !== undefined && { email: input.email }),
+        ...(input.platformRole !== undefined && {
+          platformRole: input.platformRole,
+        }),
+        ...(input.password !== undefined && {
+          passwordHash: await this.identity.hashSecret(input.password),
+        }),
+      },
+    });
+    return toPublicUser(updated);
+  }
+
+  async deleteUser(actorId: string, targetId: string): Promise<void> {
+    if (actorId === targetId) {
+      throw new BadRequestException("Cannot delete your own account");
+    }
+    const user = await this.prisma.user.findUnique({ where: { id: targetId } });
+    if (!user) throw new NotFoundException(`User not found: ${targetId}`);
+    await this.prisma.user.delete({ where: { id: targetId } });
   }
 
   async login(input: LoginInput): Promise<{ user: User; tokens: AuthTokens }> {
@@ -99,9 +139,7 @@ export class AuthService implements OnModuleInit {
       input.password,
       user.passwordHash,
     );
-    if (!ok) {
-      throw new UnauthorizedException("Invalid credentials");
-    }
+    if (!ok) throw new UnauthorizedException("Invalid credentials");
     return { user: toPublicUser(user), tokens: this.issueTokens(user) };
   }
 
@@ -137,12 +175,11 @@ export class AuthService implements OnModuleInit {
       email: user.email,
       platformRole: user.platformRole as PlatformRole,
     };
-    // expiresIn accepts strings like "15m" at runtime; its type is a strict
-    // template literal, so the env-sourced string is cast through.
     const accessTtl = (this.config.get<string>("JWT_ACCESS_TTL") ??
       "15m") as unknown as number;
+    // Default refresh TTL = 8 hours, matching the NextAuth session maxAge.
     const refreshTtl = (this.config.get<string>("JWT_REFRESH_TTL") ??
-      "7d") as unknown as number;
+      "8h") as unknown as number;
     return {
       accessToken: this.jwt.sign(
         { ...base, type: "access" },

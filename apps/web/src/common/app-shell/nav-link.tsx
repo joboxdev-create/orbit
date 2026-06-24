@@ -10,11 +10,13 @@ export function NavLink({
   icon,
   children,
   exact = false,
+  className,
 }: {
   href: string;
   icon?: ReactNode;
   children: ReactNode;
   exact?: boolean;
+  className?: string;
 }) {
   const pathname = usePathname();
   const path = href.split("?")[0];
@@ -30,6 +32,7 @@ export function NavLink({
         active
           ? "bg-accent font-medium text-accent-foreground"
           : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
+        className,
       )}
     >
       {icon && (
