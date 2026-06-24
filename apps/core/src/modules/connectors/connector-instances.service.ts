@@ -8,9 +8,9 @@ import {
 import { Prisma } from "@prisma/client";
 import { type ConnectorContext, ConnectorRegistry } from "@orbit/connector-sdk";
 import type { ZodType } from "zod";
-import { PrismaService } from "../prisma/prisma.service";
-import { CryptoService } from "../crypto/crypto.service";
-import { AccessControlService } from "../authz/access-control.service";
+import { PrismaService } from "../../shared/prisma/prisma.service";
+import { CryptoService } from "../../shared/crypto/crypto.service";
+import { AccessControlService } from "../../shared/authz/access-control.service";
 import { CONNECTOR_REGISTRY } from "./connectors.tokens";
 
 export interface CreateInstanceInput {

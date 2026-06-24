@@ -1,4 +1,4 @@
-import { Logo } from "@/components/logo";
+import { Logo } from "@/common/logo";
 import { UserMenu } from "./user-menu";
 
 /**

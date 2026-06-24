@@ -1,5 +1,5 @@
 import { Settings } from "lucide-react";
-import { ComingSoon } from "@/components/app-shell/coming-soon";
+import { ComingSoon } from "@/common/app-shell/coming-soon";
 
 /** Workspace & account settings. Placeholder for now. */
 export default function SettingsPage() {

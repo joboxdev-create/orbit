@@ -1,11 +1,11 @@
 import Link from "next/link";
 import { LAYER_LABELS, type LayerKind } from "@orbit/shared";
-import { auth } from "@/auth";
-import { getConnectors } from "@/lib/api";
-import { LayerIcon } from "@/components/layer-icon";
-import { BrandIcon } from "@/components/brand-icon";
-import { AuthControls } from "@/components/auth-buttons";
-import { Logo } from "@/components/logo";
+import { auth } from "@/shared/auth";
+import { getConnectors } from "@/shared/api";
+import { LayerIcon } from "@/common/layer-icon";
+import { BrandIcon } from "@/common/brand-icon";
+import { AuthControls } from "@/common/auth-buttons";
+import { Logo } from "@/common/logo";
 
 const FEATURES = [
   {

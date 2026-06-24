@@ -1,4 +1,4 @@
-import { auth } from "@/auth";
+import { auth } from "@/shared/auth";
 
 /** Base URL of the ORBIT core API. Configured via env, never hardcoded. */
 export const CORE_API_URL =

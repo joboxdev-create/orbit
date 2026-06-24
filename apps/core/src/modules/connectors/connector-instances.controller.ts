@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Param, Post } from "@nestjs/common";
 import { z } from "zod";
-import { ZodValidationPipe } from "../common/zod-validation.pipe";
+import { ZodValidationPipe } from "../../common/zod-validation.pipe";
 import { CurrentUser } from "../auth/decorators";
 import type { AuthUser } from "../auth/auth.types";
 import {

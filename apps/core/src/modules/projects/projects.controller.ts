@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Param, Post, Query } from "@nestjs/common";
 import { CreateProject } from "@orbit/shared";
-import { ZodValidationPipe } from "../common/zod-validation.pipe";
+import { ZodValidationPipe } from "../../common/zod-validation.pipe";
 import { CurrentUser } from "../auth/decorators";
 import type { AuthUser } from "../auth/auth.types";
 import { ProjectsService } from "./projects.service";

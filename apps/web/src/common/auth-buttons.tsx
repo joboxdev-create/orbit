@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { LayoutDashboard, LogOut } from "lucide-react";
-import { auth, signOut } from "@/auth";
+import { auth, signOut } from "@/shared/auth";
 
 /** Server-rendered sign-in / sign-out controls backed by Auth.js server actions. */
 export async function AuthControls() {

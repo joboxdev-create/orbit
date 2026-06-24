@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
 import type { CreateOrganization } from "@orbit/shared";
-import { PrismaService } from "../prisma/prisma.service";
-import { AccessControlService } from "../authz/access-control.service";
+import { PrismaService } from "../../shared/prisma/prisma.service";
+import { AccessControlService } from "../../shared/authz/access-control.service";
 
 @Injectable()
 export class OrganizationsService {

@@ -1,5 +1,5 @@
 import { MessagesSquare } from "lucide-react";
-import { ComingSoon } from "@/components/app-shell/coming-soon";
+import { ComingSoon } from "@/common/app-shell/coming-soon";
 
 /**
  * AI chat over the whole infrastructure. Placeholder for now: the AI layer is

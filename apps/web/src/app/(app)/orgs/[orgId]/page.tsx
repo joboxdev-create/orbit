@@ -6,9 +6,9 @@ import {
   createProject,
   getOrganization,
   getProjects,
-} from "@/lib/api";
-import { Breadcrumb } from "@/components/app-shell/breadcrumb";
-import { PageHeader, PageShell } from "@/components/app-shell/page-shell";
+} from "@/shared/api";
+import { Breadcrumb } from "@/common/app-shell/breadcrumb";
+import { PageHeader, PageShell } from "@/common/app-shell/page-shell";
 
 /**
  * Organization detail: the projects under a group, plus an inline form to add

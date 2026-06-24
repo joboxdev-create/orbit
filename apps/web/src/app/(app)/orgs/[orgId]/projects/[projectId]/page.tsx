@@ -6,11 +6,11 @@ import {
   getOrganization,
   getProject,
   type ConnectorInstance,
-} from "@/lib/api";
-import { Breadcrumb } from "@/components/app-shell/breadcrumb";
-import { PageHeader, PageShell } from "@/components/app-shell/page-shell";
-import { LayerIcon } from "@/components/layer-icon";
-import { BrandIcon } from "@/components/brand-icon";
+} from "@/shared/api";
+import { Breadcrumb } from "@/common/app-shell/breadcrumb";
+import { PageHeader, PageShell } from "@/common/app-shell/page-shell";
+import { LayerIcon } from "@/common/layer-icon";
+import { BrandIcon } from "@/common/brand-icon";
 
 /**
  * Project detail: the connected services grouped by Layer, with the catalog of

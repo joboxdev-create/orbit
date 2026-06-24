@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { AuthError } from "next-auth";
-import { auth, signIn } from "@/auth";
-import { Logo } from "@/components/logo";
+import { auth, signIn } from "@/shared/auth";
+import { Logo } from "@/common/logo";
 
 /**
  * Email/password sign-in against ORBIT's own identity store. There is no public

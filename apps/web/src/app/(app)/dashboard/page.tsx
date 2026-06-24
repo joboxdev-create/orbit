@@ -2,9 +2,9 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { ArrowRight, Building2, Plus } from "lucide-react";
-import { auth } from "@/auth";
-import { createOrganization, getMe, getOrganizations } from "@/lib/api";
-import { PageHeader, PageShell } from "@/components/app-shell/page-shell";
+import { auth } from "@/shared/auth";
+import { createOrganization, getMe, getOrganizations } from "@/shared/api";
+import { PageHeader, PageShell } from "@/common/app-shell/page-shell";
 
 /**
  * Workspace home: the organizations the user owns, the entry point into the

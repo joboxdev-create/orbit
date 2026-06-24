@@ -17,7 +17,7 @@ import {
   type PlatformRole,
   type User,
 } from "@orbit/shared";
-import { PrismaService } from "../prisma/prisma.service";
+import { PrismaService } from "../../shared/prisma/prisma.service";
 import type { JwtPayload } from "./auth.types";
 import {
   IDENTITY_PROVIDER,

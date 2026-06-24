@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { LAYER_LABELS, type LayerKind } from "@orbit/shared";
-import { getConnectors } from "@/lib/api";
-import { PageHeader, PageShell } from "@/components/app-shell/page-shell";
-import { BrandIcon } from "@/components/brand-icon";
+import { getConnectors } from "@/shared/api";
+import { PageHeader, PageShell } from "@/common/app-shell/page-shell";
+import { BrandIcon } from "@/common/brand-icon";
 
 /**
  * Global catalog of connector types. Optionally filtered by ?layer=<kind> —

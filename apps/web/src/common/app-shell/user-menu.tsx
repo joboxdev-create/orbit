@@ -1,5 +1,5 @@
 import { LogOut } from "lucide-react";
-import { auth, signOut } from "@/auth";
+import { auth, signOut } from "@/shared/auth";
 
 /** Compact account control for the navbar: identity + sign out. */
 export async function UserMenu() {

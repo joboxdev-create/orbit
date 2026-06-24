@@ -1,8 +1,8 @@
 import type { ReactNode } from "react";
 import { redirect } from "next/navigation";
-import { auth } from "@/auth";
-import { Navbar } from "@/components/app-shell/navbar";
-import { Sidebar } from "@/components/app-shell/sidebar";
+import { auth } from "@/shared/auth";
+import { Navbar } from "@/common/app-shell/navbar";
+import { Sidebar } from "@/common/app-shell/sidebar";
 
 /**
  * Shell for everything behind auth: a fixed navbar, a fixed left sidebar, and a
