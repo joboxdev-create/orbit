@@ -1,0 +1,5 @@
+{
+  "main": ".sidecar-build/server.cjs",
+  "output": ".sidecar-build/sea-prep.blob",
+  "disableExperimentalSEAWarning": true
+}

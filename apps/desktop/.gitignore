@@ -1,0 +1,5 @@
+dist
+dist-sidecar
+.sidecar-build
+src-tauri/binaries
+.turbo

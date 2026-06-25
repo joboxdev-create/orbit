@@ -1,5 +1,7 @@
 import {
   BadRequestException,
+  ConflictException,
+  ForbiddenException,
   Inject,
   Injectable,
   Logger,
@@ -7,11 +9,17 @@ import {
 } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
 import { type ConnectorContext, ConnectorRegistry } from "@orbit/connector-sdk";
+import {
+  ConnectorInstanceService as EngineConnectorInstanceService,
+  type ConnectorInstanceRecord,
+  EngineError,
+} from "@orbit/engine";
 import type { ZodType } from "zod";
 import { PrismaService } from "../../shared/prisma/prisma.service";
 import { CryptoService } from "../../shared/crypto/crypto.service";
 import { AccessControlService } from "../../shared/authz/access-control.service";
 import { CONNECTOR_REGISTRY } from "./connectors.tokens";
+import { PrismaConnectorInstanceRepository } from "./prisma-connector-instance.repository";
 
 export interface CreateInstanceInput {
   connectorType: string;
@@ -21,26 +29,18 @@ export interface CreateInstanceInput {
 }
 
 export interface RegisterInstanceInput {
-  /** "catalog" = a code-backed connector from the registry; "custom" = a
-   *  user-declared service that has no live integration yet. */
   source: "catalog" | "custom";
   name: string;
-  /** Required when source is "catalog": the registry connector type id. */
   connectorType?: string;
-  /** Required when source is "custom": the chosen layer category. */
   layer?: string;
   config: Record<string, unknown>;
 }
 
 export interface UpdateInstanceInput {
   name?: string;
-  /** Only applied to custom instances (catalog ones derive layer from the def). */
   layer?: string;
   config?: Record<string, unknown>;
 }
-
-/** Sentinel connectorType for user-declared services without a code connector. */
-export const CUSTOM_CONNECTOR_TYPE = "custom";
 
 // Never return the encrypted blob to clients.
 const PUBLIC_FIELDS = {
@@ -54,9 +54,20 @@ const PUBLIC_FIELDS = {
   createdAt: true,
 } satisfies Prisma.ConnectorInstanceSelect;
 
+/**
+ * Server adapter over the engine's connector-instance domain logic. This class
+ * owns only the server concerns — **governance** (RBAC via AccessControlService)
+ * and **transport** (mapping engine errors to HTTP). The actual domain logic for
+ * register/list/update/remove lives in {@link EngineConnectorInstanceService},
+ * so the desktop host can reuse it over a filesystem store.
+ *
+ * `create` (configure & connect + testConnection) and `invoke` still run here
+ * directly; they move into the engine when the credentialed flows are built.
+ */
 @Injectable()
 export class ConnectorInstancesService {
   private readonly logger = new Logger(ConnectorInstancesService.name);
+  private readonly instances: EngineConnectorInstanceService;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -64,7 +75,13 @@ export class ConnectorInstancesService {
     private readonly acl: AccessControlService,
     @Inject(CONNECTOR_REGISTRY)
     private readonly registry: ConnectorRegistry,
-  ) {}
+    repo: PrismaConnectorInstanceRepository,
+  ) {
+    this.instances = new EngineConnectorInstanceService({
+      repo,
+      registry: this.registry,
+    });
+  }
 
   async create(userId: string, projectId: string, input: CreateInstanceInput) {
     const project = await this.requireProject(projectId);
@@ -88,7 +105,6 @@ export class ConnectorInstancesService {
       "credentials",
     );
 
-    // Validate the connection works before persisting anything.
     try {
       await def.testConnection(this.buildContext(config, credentials));
     } catch (err) {
@@ -111,12 +127,6 @@ export class ConnectorInstancesService {
     });
   }
 
-  /**
-   * Register a connector in a project without configuring credentials. This is
-   * the "catalogue it" step (status "configured"); wiring credentials, running
-   * testConnection and invoking capabilities is a separate, later step. Supports
-   * both catalog connectors (code-backed) and custom user-declared services.
-   */
   async register(
     userId: string,
     projectId: string,
@@ -124,86 +134,32 @@ export class ConnectorInstancesService {
   ) {
     const project = await this.requireProject(projectId);
     await this.acl.assertMember(userId, project.orgId, "member");
-
-    let connectorType: string;
-    let layer: string;
-
-    if (input.source === "catalog") {
-      if (!input.connectorType) {
-        throw new BadRequestException("connectorType is required for catalog connectors");
-      }
-      const def = this.registry.get(input.connectorType);
-      if (!def) {
-        throw new BadRequestException(
-          `Unknown connector type: ${input.connectorType}`,
-        );
-      }
-      connectorType = def.type;
-      layer = def.layer;
-    } else {
-      if (!input.layer) {
-        throw new BadRequestException("layer is required for custom connectors");
-      }
-      connectorType = CUSTOM_CONNECTOR_TYPE;
-      layer = input.layer;
-    }
-
-    return this.prisma.connectorInstance.create({
-      data: {
-        projectId,
-        connectorType,
-        layer,
-        name: input.name,
-        status: "configured",
-        config: input.config as Prisma.InputJsonValue,
-      },
-      select: PUBLIC_FIELDS,
-    });
+    const record = await this.guard(() =>
+      this.instances.register(projectId, input),
+    );
+    return toPublic(record);
   }
 
   async list(userId: string, projectId: string) {
     const project = await this.requireProject(projectId);
     await this.acl.assertMember(userId, project.orgId);
-    return this.prisma.connectorInstance.findMany({
-      where: { projectId },
-      orderBy: { createdAt: "desc" },
-      select: PUBLIC_FIELDS,
-    });
+    const records = await this.instances.listByProject(projectId);
+    return records.map(toPublic);
   }
 
-  async update(
-    userId: string,
-    instanceId: string,
-    input: UpdateInstanceInput,
-  ) {
+  async update(userId: string, instanceId: string, input: UpdateInstanceInput) {
     const instance = await this.requireInstance(instanceId);
     await this.acl.assertMember(userId, instance.project.orgId, "member");
-
-    const data: Prisma.ConnectorInstanceUpdateInput = {};
-    if (input.name !== undefined) data.name = input.name;
-    if (input.config !== undefined) {
-      data.config = input.config as Prisma.InputJsonValue;
-    }
-    // The layer of a catalog connector is fixed by its definition; only custom
-    // (user-declared) instances may change layer.
-    if (
-      input.layer !== undefined &&
-      instance.connectorType === CUSTOM_CONNECTOR_TYPE
-    ) {
-      data.layer = input.layer;
-    }
-
-    return this.prisma.connectorInstance.update({
-      where: { id: instanceId },
-      data,
-      select: PUBLIC_FIELDS,
-    });
+    const record = await this.guard(() =>
+      this.instances.update(instanceId, input),
+    );
+    return toPublic(record);
   }
 
   async remove(userId: string, instanceId: string): Promise<void> {
     const instance = await this.requireInstance(instanceId);
     await this.acl.assertMember(userId, instance.project.orgId, "member");
-    await this.prisma.connectorInstance.delete({ where: { id: instanceId } });
+    await this.guard(() => this.instances.remove(instanceId));
   }
 
   /** Invoke a connector capability directly — the no-AI execution path. */
@@ -235,7 +191,6 @@ export class ConnectorInstancesService {
       );
     }
 
-    // Read-only capabilities need only viewer; mutating ones need member.
     await this.acl.assertMember(
       userId,
       instance.project.orgId,
@@ -278,6 +233,27 @@ export class ConnectorInstancesService {
     return instance;
   }
 
+  /** Run an engine call, mapping its framework-free errors to HTTP exceptions. */
+  private async guard<T>(fn: () => Promise<T>): Promise<T> {
+    try {
+      return await fn();
+    } catch (err) {
+      if (err instanceof EngineError) {
+        switch (err.kind) {
+          case "not_found":
+            throw new NotFoundException(err.message);
+          case "conflict":
+            throw new ConflictException(err.message);
+          case "forbidden":
+            throw new ForbiddenException(err.message);
+          default:
+            throw new BadRequestException(err.message);
+        }
+      }
+      throw err;
+    }
+  }
+
   private parseOrThrow<T>(schema: ZodType, value: unknown, label: string): T {
     const result = schema.safeParse(value);
     if (!result.success) {
@@ -305,4 +281,9 @@ export class ConnectorInstancesService {
       },
     };
   }
+}
+
+function toPublic(record: ConnectorInstanceRecord) {
+  const { encryptedCredentials: _omit, ...publicFields } = record;
+  return publicFields;
 }

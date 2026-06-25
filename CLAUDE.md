@@ -129,11 +129,50 @@ apps/
     src/components/ui/         primitivi shadcn/ui (gestiti dalla CLI, non editare a mano salvo necessità)
     src/shared/               auth.ts (config NextAuth), api.ts (fetch verso il core con Bearer)
     src/lib/utils.ts          cn() (clsx + tailwind-merge)
+  desktop/             @orbit/desktop — app desktop local-first (Vite + React; guscio Tauri da aggiungere)
+    sidecar/server.ts         host locale del motore: HTTP su 127.0.0.1:4317 che espone @orbit/engine
+                              sugli adapter **filesystem** (`.orbit/`), no DB/auth/org. Mirror locale del server.
+    src/                      frontend Vite + React, riusa shadcn/ui + tema (copia di globals.css) +
+                              componenti (button/input/label/card/select/dialog/dropdown-menu/brand-icon)
+                              + connector-catalog; src/lib/api.ts → sidecar. **App-shell come la web**
+                              (src/components/app-shell/): Navbar (con **Catalogue** explorer connettori
+                              stile store + **Sync** placeholder con gate login) + Sidebar **connector-centric**
+                              (lista progetti ↔ nav progetto: Overview/Chat/Graph + lista connettori con
+                              **loghi** + "+" CreateConnectorDialog + kebab ⋮ Edit/Delete). Header progetto:
+                              kebab ⋮ Edit/Delete progetto (ProjectActions). App.tsx orchestra (no router;
+                              `selected` + `view`: overview/connector/graph/chat). **Niente org, niente login**
+                              (local-first; auth solo alla sync col server, ancora da implementare).
+    src-tauri/                guscio nativo Tauri v2 (Rust): finestra + frontend. src/lib.rs **avvia il
+                              sidecar** all'apertura e lo **uccide all'uscita** — in **dev** lancia `node`
+                              (CARGO_MANIFEST_DIR), in **release** il binario bundlato accanto all'eseguibile.
+                              tauri.conf.json: externalBin `binaries/orbit-sidecar`, beforeBuildCommand
+                              builda anche il binario, identifier com.orbit.desktop, package Cargo `orbit`.
+    scripts/build-sidecar-bin.sh  compila il sidecar in un **eseguibile self-contained** (Node SEA: esbuild
+                              bundle → blob → inject con postject) → src-tauri/binaries/orbit-sidecar-<triple>.
+                              Così l'app pacchettizzata gira **senza Node** sul PC dell'utente.
+    tsconfig.json (frontend) · tsconfig.sidecar.json (Node/CJS → dist-sidecar) · vite.config.ts
+                              (nota: `commonjsOptions.include: [/packages\//]` perché i pacchetti workspace
+                              sono CJS e Rollup non vede i loro named export in build — gotcha Vite+monorepo)
+    Dev: **un solo comando** `pnpm --filter @orbit/desktop tauri dev` — builda il sidecar, avvia Vite,
+         apre la finestra nativa e il guscio fa partire il sidecar da sé (lo spegne all'uscita).
+  website/             @orbit/website — sito vetrina pubblico (Next.js statico, **self-contained**, zero
+                       dipendenze workspace → deploy indipendente su **Vercel**, root dir `apps/website`).
+                       Landing: hero + features + band loghi + Download + footer. Riusa tema shadcn +
+                       Button/Card/Badge/BrandIcon. **Download Linux self-hosted**: il `.deb` sta in
+                       `public/downloads/` (servito da Vercel, niente GitHub/CI); Mac/Windows = "Coming soon".
+                       (Il binario ~37MB è committato nel repo — scelta "for now"; in futuro release/LFS.)
 infra/
   keycloak/            realm-export.json importato da docker-compose (--import-realm)
 packages/
   shared/              @orbit/shared        — tipi dominio con zod (Org, Project, Layer, Connector, auth)
   connector-sdk/       @orbit/connector-sdk — contratto connettori (Capability, ApiCatalog, Registry, mcp)
+  engine/              @orbit/engine        — logica di dominio host-agnostica (no framework):
+                       CryptoEngine (AES-256-GCM), createDefaultRegistry() (catalogo connettori),
+                       i **ports** in src/domain/ (ProjectRepository, ConnectorInstanceRepository + tipi),
+                       EngineError, ConnectorInstanceService (orchestrazione register/list/update/remove),
+                       e gli **adapter filesystem** in src/adapters/fs/ (FsProjectRepository,
+                       FsConnectorInstanceRepository su `.orbit/` JSON — lo store del desktop, niente DB).
+                       Il server NestJS è l'altro adapter (Prisma) + governance/HTTP.
   connectors/
     github/            @orbit/connector-github   — repos/issues (read-only)
     keycloak/          @orbit/connector-keycloak — realms/clients/users via Admin API (read-only)
@@ -148,6 +187,8 @@ Convenzioni frontend dettagliate in [apps/web/CLAUDE.md](apps/web/CLAUDE.md).
 **Vincolo ESM/CJS:** i pacchetti condivisi compilano in **CommonJS** (niente `"type": "module"`) così sia Nest (CJS) sia Next (bundler) li consumano senza interop. Il core usa `module: commonjs` + `moduleResolution: node`. Non reintrodurre `"type": "module"` nei pacchetti senza adeguare il core.
 
 ## Visione
+
+> Visione estesa e roadmap concettuale (multi-prodotto, local-first vs server-first, ecc.) in [summary.md](summary.md) — **leggere solo quando si discute della direzione**, non è una guida operativa. Lo stato reale del codice è questo CLAUDE.md.
 
 **ORBIT** è un orchestratore/centralizzatore/connettore open source che unifica i principali applicativi enterprise usati da un'azienda. Non ha lock-in verso un singolo vendor: è la **vista dall'alto** sull'intera infrastruttura di un'organizzazione, con la possibilità di entrare nel dettaglio di ogni strumento connesso.
 
@@ -244,6 +285,11 @@ payments/billing e analytics/product (sono *business-ops*, non infrastruttura).
 - **Primo connettore MVP:** GitHub (read-only); aggiunto anche Keycloak (layer `identity`).
 - **Self-hosted come connettori:** sì — Keycloak è un ConnectorInstance del layer `identity`, non un concetto separato.
 - **Tassonomia layer:** 13 layer in 5 macro-aree lungo il ciclo di vita (vedi *Layer / Domini*). Risolve i nodi aperti su server vs cloud (fusi in `hosting`), IaC vs runtime (`iac` separato da `orchestration`), e test (sciolto in `cicd`+`security`). Cloud è dentro l'MVP come layer `hosting`.
+- **Direzione: local-first, Orbit Desktop come prodotto guida** (vedi [summary.md](summary.md)). App **Tauri** (Ubuntu/Mac/Windows), UI **Vite + React SPA** che riusa shadcn/ui + tema Tailwind + componenti (il "Next server": server actions/components/NextAuth **non** sopravvive in local-first — il data layer parla con un motore locale). `apps/web` attuale = UI del futuro "Orbit Server".
+- **Un motore, più host:** la logica di dominio si estrae in **`@orbit/engine`** (host-agnostica), via **ports & adapters**. Server = NestJS adapter sopra il motore (Prisma/Postgres); Desktop = sidecar Node che esegue il motore + shell Tauri. *Fase 0 in corso*: crypto + registry + ports del dominio progetto già nel motore.
+- **Desktop file-first, zero DB:** la verità del progetto sono **i file** (cartella con `.orbit/`, stile `.git/`), non un database — come git/VSCode/GitHub Desktop, dove il filesystem è la sorgente e l'eventuale SQLite è solo *cache/indice* dell'app. Un DB locale (SQLite) si aggiunge **solo dopo** come indice/cache (ricerca, grafo), mai come verità. → adapter **filesystem** (desktop) vs **Prisma/Postgres** (server).
+- **Separazione dei concern nel motore:** *dominio progetto* (`Project`, `ConnectorInstance`, poi `Environment`/`Resource`/`Action`) è universale (entrambi gli host); *collaborazione/governance* (`User`, `Organization`, `Membership`, auth, RBAC) è **solo server**, un layer sopra i ports. Sul desktop, da soli, non esistono utenti/org/ruoli — solo progetti su disco.
+- **Unità clonabile = il Project** (il "repo": manifest `.orbit/project.yaml`, push/pull git-like verso la Org, **segreti esclusi** → keychain OS). *Workspace* = contenitore locale (multi-root, stile VSCode); *Organization* = tenancy lato server.
 
 ## Decisioni ancora aperte
 
@@ -254,16 +300,30 @@ payments/billing e analytics/product (sono *business-ops*, non infrastruttura).
 
 - **Auth completa**: refresh token silenzioso in Auth.js (sessione 8h, refresh 30s prima della scadenza, redirect a `/login` su `RefreshError`); CRUD utenti admin (lista, dettaglio, edit, delete); CRUD org/progetti (PATCH/DELETE con RBAC).
 - **Tassonomia layer** a 13 layer in 5 macro-aree.
-- **Connettori — register**: modale a 2 tab (catalog/custom) nella sidebar connector-centric. Registra l'istanza (status `configured`).
+- **Connettori — CRUD istanza**: register (modale 2 tab catalog/custom), edit/delete via kebab in sidebar connector-centric; store catalogo ("mini playstore") con loghi.
+- **Fase 0 (motore) quasi completa**: `@orbit/engine` con crypto + registry + ports (Project + ConnectorInstance) + `ConnectorInstanceService`; il core delega la persistenza di **progetti e connettori** al motore via **adapter Prisma** (`PrismaProjectRepository`, `PrismaConnectorInstanceRepository`) ed è un thin wrapper di governance/HTTP. Restano da spostare solo `create`/`invoke` connettore (col *configure & connect*).
 
-## Prossimi passi (priorità: base senza AI prima)
+## Prossimi passi
 
-1. **Connettori — configure & connect** *(il prossimo grande blocco)* — form guidato da `configSchema`/`credentialsSchema` del connettore per inserire le credenziali, lanciare `testConnection`, cifrare e portare lo status a `connected`. **Qui si decide il distinguo uso via API vs via MCP** (da progettare insieme, approccio enterprise). Richiede di esporre gli schemi del connettore via API (oggi `/connectors` ritorna solo i conteggi).
-2. **UI invocazione capability** — `POST /connector-instances/:id/capabilities/:name` esiste; nessuna UI. Dal dettaglio istanza connettore.
-3. **Ciclo di vita istanza** — oggi `configured`/`connected`; aggiungere almeno `error` (testConnection fallita) e `disconnected`; endpoint per ri-testare e disconnettere.
-4. **Grafo** (React Flow o Cytoscape) — relazioni tra layer/connettori, dal dettaglio progetto.
-5. **Membership UI** — invitare utenti a un'org, assegnare ruoli (`owner/admin/member/viewer`); oggi solo via DB/API.
-6. **Connettori reali** per i nuovi layer (oggi solo `repository`/`identity`).
+**Priorità guida — pivot local-first / Orbit Desktop** (vedi [summary.md](summary.md)):
+- **Fase 0 — estrazione motore** *(completa per lo scopo)*: nel motore ci sono crypto, registry, **ports** (Project + ConnectorInstance), `ConnectorInstanceService`, `EngineError`, e **gli adapter filesystem** (`FsProjectRepository`, `FsConnectorInstanceRepository`). Lato server, `ProjectsService`/`ConnectorInstancesService` sono thin wrapper sopra gli **adapter Prisma**. Verificato: il motore gira identico su Postgres (server) e su file (`.orbit/`), provato con script (crea progetto + connettori su disco). Resta solo da spostare `create`/`invoke` connettore col blocco *configure & connect*.
+- **Fase 1 — desktop offline** *(completa)*: `apps/desktop` ha i tre strati — **sidecar** (motore + adapter filesystem, compilabile in **binario self-contained** via SEA), **frontend Vite + React** (progetti + connettori), **guscio Tauri v2** che auto-avvia il sidecar. Dev: `pnpm --filter @orbit/desktop tauri dev`. **`tauri build --bundles deb` produce un `.deb` installabile** (`Orbit_0.1.0_amd64.deb`, ~37MB) con `/usr/bin/orbit` + `/usr/bin/orbit-sidecar` bundlato → gira **offline, senza Node**. Verificato.
+
+## Prossimi passi
+
+1. **Sito vetrina** *(fatto: `apps/website`, con download Linux self-hosted)* — resta solo il **deploy su Vercel** (root dir `apps/website`).
+2. **Packaging desktop Mac/Windows** *(rimandato, niente GitHub/CI per ora)*: quando servirà, build cross-platform → aggiornare `public/downloads/` o passare a release/LFS. Per ora rendere cross-platform il build del sidecar (script Node) è il prerequisito.
+3. **Sincronizzazione desktop ↔ server** (sviluppo dedicato, dove entra l'**auth**): manifest `.orbit/`, `clone`/`push`/`pull` verso le Organizations, login dal `SyncDialog` (oggi placeholder), segreti nel keychain OS.
+4. **Configure & connect** dei connettori (credenziali, testConnection, API-vs-MCP) — vale sia per server sia per desktop via il motore.
+- **Fase 2 — manifest + sync**: formato `.orbit/project.yaml`; `clone`/`push`/`pull` verso la Org (git-like); segreti esclusi.
+- **Fase 3 — connettori locali**: configure & connect + segreti nel keychain OS.
+
+**Backlog feature (indipendente dall'host, riusabile via motore):**
+1. **Connettori — configure & connect**: form guidato da `configSchema`/`credentialsSchema`, `testConnection`, cifratura, status `connected`. **Qui il distinguo uso via API vs via MCP.** Richiede esporre gli schemi del connettore (oggi `/connectors` ritorna solo i conteggi).
+2. **UI invocazione capability** — `POST /connector-instances/:id/capabilities/:name` esiste; manca UI.
+3. **Ciclo di vita istanza** — aggiungere `error`/`disconnected` + endpoint ri-test/disconnetti.
+4. **Modello**: Environments (dev/staging/prod), Resources, Actions sotto Project (dal summary).
+5. **Grafo**, **Membership UI**, **connettori reali** per i nuovi layer.
 
 ## Prerequisiti ambiente
 

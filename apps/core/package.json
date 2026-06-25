@@ -24,6 +24,7 @@
     "@orbit/connector-github": "workspace:*",
     "@orbit/connector-keycloak": "workspace:*",
     "@orbit/connector-sdk": "workspace:*",
+    "@orbit/engine": "workspace:*",
     "@orbit/shared": "workspace:*",
     "@prisma/client": "^6.1.0",
     "argon2": "^0.41.1",
