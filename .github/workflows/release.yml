@@ -52,6 +52,13 @@ jobs:
       - name: Install workspace dependencies
         run: pnpm install --frozen-lockfile
 
+      # The desktop sidecar/frontend import @orbit/engine and @orbit/shared,
+      # which must be compiled (dist/) before Tauri's beforeBuildCommand runs.
+      # turbo builds the whole dependency chain (shared → connector-sdk →
+      # connectors → engine) in order.
+      - name: Build workspace dependencies
+        run: pnpm exec turbo run build --filter=@orbit/engine
+
       - name: Build & publish the desktop app
         uses: tauri-apps/tauri-action@v0
         env:
