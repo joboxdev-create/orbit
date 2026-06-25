@@ -15,7 +15,12 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
-const GITHUB_URL = "https://github.com";
+const REPO = "joboxdev-create/orbit";
+const VERSION = "0.1.0";
+const GITHUB_URL = `https://github.com/${REPO}`;
+// GitHub release assets for this version. Bump VERSION on each new release.
+const DL = `${GITHUB_URL}/releases/download/v${VERSION}`;
+const DEB_FILE = `Orbit_${VERSION}_amd64.deb`;
 
 const FEATURES = [
   {
@@ -35,7 +40,6 @@ const FEATURES = [
   },
 ];
 
-// A few recognizable logos for the “works with your stack” band.
 const STACK = [
   "github",
   "gitlab",
@@ -51,18 +55,42 @@ const STACK = [
   "anthropic",
 ];
 
-const DEB_FILE = "orbit-desktop_0.1.0_amd64.deb";
-const DEB_URL = `/downloads/${DEB_FILE}`;
+type Asset = { href: string; label: string };
 
-const PLATFORMS = [
+const PLATFORMS: {
+  icon: typeof HardDriveDownload;
+  label: string;
+  note: string;
+  primary: Asset;
+  others: Asset[];
+}[] = [
   {
     icon: HardDriveDownload,
     label: "Linux",
-    note: ".deb · 64-bit · 37 MB",
-    href: DEB_URL,
+    note: "Debian / Ubuntu · 64-bit",
+    primary: { href: `${DL}/${DEB_FILE}`, label: "Download .deb" },
+    others: [
+      { href: `${DL}/Orbit_${VERSION}_amd64.AppImage`, label: "AppImage" },
+      { href: `${DL}/Orbit-${VERSION}-1.x86_64.rpm`, label: ".rpm" },
+    ],
   },
-  { icon: Apple, label: "macOS", note: "Universal", href: null },
-  { icon: MonitorDown, label: "Windows", note: ".msi", href: null },
+  {
+    icon: Apple,
+    label: "macOS",
+    note: "Apple Silicon",
+    primary: { href: `${DL}/Orbit_${VERSION}_aarch64.dmg`, label: "Download .dmg" },
+    others: [],
+  },
+  {
+    icon: MonitorDown,
+    label: "Windows",
+    note: "64-bit",
+    primary: {
+      href: `${DL}/Orbit_${VERSION}_x64-setup.exe`,
+      label: "Download .exe",
+    },
+    others: [{ href: `${DL}/Orbit_${VERSION}_x64_en-US.msi`, label: ".msi" }],
+  },
 ];
 
 export default function LandingPage() {
@@ -161,9 +189,10 @@ export default function LandingPage() {
             Get Orbit Desktop
           </h2>
           <p className="mx-auto mt-2 max-w-xl text-sm text-muted-foreground">
-            Install once and run offline. Available for Linux now — macOS and
-            Windows are on the way.
+            Install once and run offline. Available for Linux, macOS (Apple
+            Silicon) and Windows.
           </p>
+
           <div className="mx-auto mt-8 grid max-w-2xl gap-3 sm:grid-cols-3">
             {PLATFORMS.map((p) => (
               <div
@@ -173,25 +202,33 @@ export default function LandingPage() {
                 <p.icon size={26} className="text-muted-foreground" />
                 <p className="font-medium">{p.label}</p>
                 <p className="text-xs text-muted-foreground">{p.note}</p>
-                {p.href ? (
-                  <Button asChild size="sm" className="mt-1 gap-1.5">
-                    <a href={p.href} download={DEB_FILE}>
-                      <HardDriveDownload size={14} />
-                      Download
-                    </a>
-                  </Button>
-                ) : (
-                  <Badge variant="secondary" className="mt-1 font-normal">
-                    Coming soon
-                  </Badge>
+                <Button asChild size="sm" className="mt-1 gap-1.5">
+                  <a href={p.primary.href}>
+                    <HardDriveDownload size={14} />
+                    {p.primary.label}
+                  </a>
+                </Button>
+                {p.others.length > 0 && (
+                  <div className="flex gap-3 text-xs text-muted-foreground">
+                    {p.others.map((o) => (
+                      <a
+                        key={o.label}
+                        href={o.href}
+                        className="underline-offset-2 hover:text-foreground hover:underline"
+                      >
+                        {o.label}
+                      </a>
+                    ))}
+                  </div>
                 )}
               </div>
             ))}
           </div>
+
           <div className="mx-auto mt-8 max-w-xl">
             <p className="mb-2 inline-flex items-center gap-1.5 text-xs text-muted-foreground">
               <Terminal size={13} />
-              On Debian / Ubuntu, install from the terminal:
+              On Debian / Ubuntu, after downloading the .deb:
             </p>
             <CopyCommand command={`sudo apt install ./${DEB_FILE}`} />
             <p className="mt-2 text-xs text-muted-foreground">
@@ -199,6 +236,17 @@ export default function LandingPage() {
               “Orbit” in your apps. It runs fully offline.
             </p>
           </div>
+
+          <p className="mt-6 text-xs text-muted-foreground">
+            All releases on{" "}
+            <a
+              href={`${GITHUB_URL}/releases`}
+              className="underline-offset-2 hover:text-foreground hover:underline"
+            >
+              GitHub
+            </a>
+            .
+          </p>
         </section>
 
         {/* Footer */}
