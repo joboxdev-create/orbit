@@ -147,9 +147,10 @@ apps/
                               (CARGO_MANIFEST_DIR), in **release** il binario bundlato accanto all'eseguibile.
                               tauri.conf.json: externalBin `binaries/orbit-sidecar`, beforeBuildCommand
                               builda anche il binario, identifier com.orbit.desktop, package Cargo `orbit`.
-    scripts/build-sidecar-bin.sh  compila il sidecar in un **eseguibile self-contained** (Node SEA: esbuild
-                              bundle → blob → inject con postject) → src-tauri/binaries/orbit-sidecar-<triple>.
-                              Così l'app pacchettizzata gira **senza Node** sul PC dell'utente.
+    scripts/build-sidecar-bin.mjs compila il sidecar in un **eseguibile self-contained** (Node SEA: esbuild
+                              bundle → blob → inject con postject), **cross-platform** (Linux/Mac/Windows:
+                              gestisce codesign su macOS, `.exe` su Windows) → src-tauri/binaries/
+                              orbit-sidecar-<triple>. Così l'app pacchettizzata gira **senza Node**.
     tsconfig.json (frontend) · tsconfig.sidecar.json (Node/CJS → dist-sidecar) · vite.config.ts
                               (nota: `commonjsOptions.include: [/packages\//]` perché i pacchetti workspace
                               sono CJS e Rollup non vede i loro named export in build — gotcha Vite+monorepo)
@@ -161,6 +162,10 @@ apps/
                        Button/Card/Badge/BrandIcon. **Download Linux self-hosted**: il `.deb` sta in
                        `public/downloads/` (servito da Vercel, niente GitHub/CI); Mac/Windows = "Coming soon".
                        (Il binario ~37MB è committato nel repo — scelta "for now"; in futuro release/LFS.)
+.github/
+  workflows/release.yml  CI release desktop: matrix Linux/Mac/Windows + tauri-action; a ogni tag `v*`
+                       builda i pacchetti (.deb/AppImage, .dmg, .msi) e pubblica una **GitHub Release** (draft).
+                       Ogni runner costruisce il sidecar SEA per il proprio OS (build:sidecar-bin.mjs).
 infra/
   keycloak/            realm-export.json importato da docker-compose (--import-realm)
 packages/
@@ -311,8 +316,8 @@ payments/billing e analytics/product (sono *business-ops*, non infrastruttura).
 
 ## Prossimi passi
 
-1. **Sito vetrina** *(fatto: `apps/website`, con download Linux self-hosted)* — resta solo il **deploy su Vercel** (root dir `apps/website`).
-2. **Packaging desktop Mac/Windows** *(rimandato, niente GitHub/CI per ora)*: quando servirà, build cross-platform → aggiornare `public/downloads/` o passare a release/LFS. Per ora rendere cross-platform il build del sidecar (script Node) è il prerequisito.
+1. **Packaging desktop cross-platform** *(workflow pronto: `.github/workflows/release.yml`)* — resta da **verificare su GitHub**: push del repo + lockfile aggiornato, poi `git tag v0.1.0 && git push --tags` → la CI sforna i pacchetti e crea una Release draft. Caveat: macOS solo Apple Silicon (Intel = job `macos-13` da aggiungere poi); il workflow non è testabile in locale.
+2. **Riadattare il sito ai download reali**: i bottoni di `apps/website` → asset delle **GitHub Releases** (risolve anche il limite Vercel sul `.deb`); poi si può rimuovere il `.deb` committato in `public/downloads/`.
 3. **Sincronizzazione desktop ↔ server** (sviluppo dedicato, dove entra l'**auth**): manifest `.orbit/`, `clone`/`push`/`pull` verso le Organizations, login dal `SyncDialog` (oggi placeholder), segreti nel keychain OS.
 4. **Configure & connect** dei connettori (credenziali, testConnection, API-vs-MCP) — vale sia per server sia per desktop via il motore.
 - **Fase 2 — manifest + sync**: formato `.orbit/project.yaml`; `clone`/`push`/`pull` verso la Org (git-like); segreti esclusi.

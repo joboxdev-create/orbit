@@ -6,7 +6,7 @@
     "dev": "vite",
     "build": "tsc -p tsconfig.sidecar.json && vite build",
     "build:sidecar": "tsc -p tsconfig.sidecar.json",
-    "build:sidecar-bin": "bash scripts/build-sidecar-bin.sh",
+    "build:sidecar-bin": "node scripts/build-sidecar-bin.mjs",
     "sidecar": "node dist-sidecar/server.js",
     "tauri": "tauri",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.sidecar.json --noEmit",

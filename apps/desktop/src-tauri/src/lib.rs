@@ -17,11 +17,17 @@ fn spawn_sidecar() -> Option<Child> {
     c.arg(script);
     c
   } else {
-    // Tauri's externalBin places `orbit-sidecar` next to the app executable.
+    // Tauri's externalBin places the sidecar next to the app executable
+    // (`orbit-sidecar`, or `orbit-sidecar.exe` on Windows).
+    let name = if cfg!(windows) {
+      "orbit-sidecar.exe"
+    } else {
+      "orbit-sidecar"
+    };
     let bin = std::env::current_exe()
       .ok()
-      .and_then(|exe| exe.parent().map(|dir| dir.join("orbit-sidecar")))
-      .unwrap_or_else(|| std::path::PathBuf::from("orbit-sidecar"));
+      .and_then(|exe| exe.parent().map(|dir| dir.join(name)))
+      .unwrap_or_else(|| std::path::PathBuf::from(name));
     Command::new(bin)
   };
 
