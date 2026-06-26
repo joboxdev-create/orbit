@@ -6,8 +6,8 @@
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:1420",
-    "beforeDevCommand": "pnpm build:sidecar && pnpm dev",
-    "beforeBuildCommand": "pnpm build && pnpm build:sidecar-bin"
+    "beforeDevCommand": "pnpm build:sidecar && pnpm build:mcp && pnpm dev",
+    "beforeBuildCommand": "pnpm build && pnpm build:sidecar-bin && pnpm build:mcp-bin"
   },
   "app": {
     "windows": [
@@ -28,7 +28,7 @@
   "bundle": {
     "active": true,
     "targets": "all",
-    "externalBin": ["binaries/orbit-sidecar"],
+    "externalBin": ["binaries/orbit-sidecar", "binaries/orbit-mcp"],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

@@ -5,4 +5,6 @@ export * from "./registry.js";
 export * from "./errors.js";
 export * from "./domain/index.js";
 export * from "./services/connector-instance-service.js";
+export * from "./services/saved-request-service.js";
+export * from "./services/conversation-service.js";
 export * from "./adapters/fs/index.js";

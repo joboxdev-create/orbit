@@ -1,5 +1,7 @@
 dist
 dist-sidecar
+dist-mcp
 .sidecar-build
+.mcp-build
 src-tauri/binaries
 .turbo

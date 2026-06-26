@@ -1,22 +1,19 @@
-import { type ReactNode, useEffect, useState } from "react";
-import {
-  ArrowRight,
-  FolderGit2,
-  MessageSquare,
-  Network,
-  Plug,
-} from "lucide-react";
+import { useEffect, useState } from "react";
+import { ArrowRight, FolderGit2, Network, Plug } from "lucide-react";
 import { LAYER_LABELS } from "@orbit/shared";
 import {
   api,
   type CatalogEntry,
   type ConnectorInstance,
+  type Conversation,
   type Project,
 } from "./lib/api";
 import { Navbar } from "./components/app-shell/navbar";
 import { Sidebar, type ProjectView } from "./components/app-shell/sidebar";
 import { ComingSoon } from "./components/app-shell/coming-soon";
 import { ProjectActions } from "./components/app-shell/project-actions";
+import { ConnectorDetail } from "./components/connector-detail";
+import { Chat } from "./components/chat";
 import { BrandIcon } from "./components/ui/brand-icon";
 import { Card, CardContent } from "./components/ui/card";
 
@@ -39,6 +36,7 @@ export default function App() {
   const [selected, setSelected] = useState<Project | null>(null);
   const [view, setView] = useState<ProjectView>({ kind: "overview" });
   const [connectors, setConnectors] = useState<ConnectorInstance[]>([]);
+  const [conversations, setConversations] = useState<Conversation[]>([]);
   const [catalog, setCatalog] = useState<CatalogEntry[]>([]);
 
   async function refresh() {
@@ -72,10 +70,19 @@ export default function App() {
     }
   }
 
+  async function loadConversations(projectId: string) {
+    try {
+      setConversations(await api.listConversations(projectId));
+    } catch {
+      setConversations([]);
+    }
+  }
+
   function openProject(p: Project) {
     setSelected(p);
     setView({ kind: "overview" });
     void loadConnectors(p.id);
+    void loadConversations(p.id);
   }
 
   async function onConnectorsChanged() {
@@ -87,6 +94,26 @@ export default function App() {
         ? { kind: "overview" }
         : v,
     );
+  }
+
+  async function onConversationsChanged() {
+    if (!selected) return;
+    const cs = await api.listConversations(selected.id);
+    setConversations(cs);
+    setView((v) =>
+      v.kind === "chat" &&
+      v.conversationId &&
+      !cs.find((c) => c.id === v.conversationId)
+        ? { kind: "overview" }
+        : v,
+    );
+  }
+
+  async function newChat() {
+    if (!selected) return;
+    const c = await api.createConversation(selected.id, {});
+    await loadConversations(selected.id);
+    setView({ kind: "chat", conversationId: c.id });
   }
 
   return (
@@ -101,9 +128,12 @@ export default function App() {
         onCreatedProject={() => void refresh()}
         connectors={connectors}
         catalog={catalog}
+        conversations={conversations}
         view={view}
         onView={setView}
         onConnectorsChanged={() => void onConnectorsChanged()}
+        onConversationsChanged={() => void onConversationsChanged()}
+        onNewChat={() => void newChat()}
       />
       <main className="pt-14 md:pl-60">
         <div className="mx-auto w-full max-w-4xl px-6 py-8">
@@ -118,11 +148,14 @@ export default function App() {
               view={view}
               connectors={connectors}
               catalog={catalog}
+              conversations={conversations}
               onProjectChanged={() => void refresh()}
               onProjectDeleted={() => {
                 setSelected(null);
                 void refresh();
               }}
+              onConnectorChanged={() => void onConnectorsChanged()}
+              onConversationsChanged={() => void onConversationsChanged()}
             />
           ) : (
             <ProjectsLanding
@@ -142,20 +175,30 @@ function ProjectMain({
   view,
   connectors,
   catalog,
+  conversations,
   onProjectChanged,
   onProjectDeleted,
+  onConnectorChanged,
+  onConversationsChanged,
 }: {
   project: Project;
   view: ProjectView;
   connectors: ConnectorInstance[];
   catalog: CatalogEntry[];
+  conversations: Conversation[];
   onProjectChanged: () => void;
   onProjectDeleted: () => void;
+  onConnectorChanged: () => void;
+  onConversationsChanged: () => void;
 }) {
   const connector =
     view.kind === "connector"
       ? connectors.find((c) => c.id === view.id)
       : undefined;
+  const conversation =
+    view.kind === "chat" && view.conversationId
+      ? (conversations.find((c) => c.id === view.conversationId) ?? null)
+      : null;
 
   return (
     <div className="space-y-6">
@@ -180,7 +223,11 @@ function ProjectMain({
       )}
       {view.kind === "connector" &&
         (connector ? (
-          <ConnectorDetail connector={connector} catalog={catalog} />
+          <ConnectorDetail
+            connector={connector}
+            catalog={catalog}
+            onChanged={onConnectorChanged}
+          />
         ) : (
           <p className="text-sm text-muted-foreground">Connector not found.</p>
         ))}
@@ -192,10 +239,10 @@ function ProjectMain({
         />
       )}
       {view.kind === "chat" && (
-        <ComingSoon
-          title="Chat"
-          description="Ask about this project's infrastructure and connectors."
-          icon={<MessageSquare size={22} />}
+        <Chat
+          conversation={conversation}
+          connectors={connectors}
+          onSaved={onConversationsChanged}
         />
       )}
     </div>
@@ -248,78 +295,6 @@ function ProjectOverview({
         ))}
       </div>
     </section>
-  );
-}
-
-function ConnectorDetail({
-  connector,
-  catalog,
-}: {
-  connector: ConnectorInstance;
-  catalog: CatalogEntry[];
-}) {
-  const iconSlug =
-    catalog.find((c) => c.type === connector.connectorType)?.icon ?? null;
-  const url =
-    typeof connector.config?.url === "string" ? connector.config.url : null;
-
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-3">
-        <span className="flex size-12 items-center justify-center rounded-xl bg-primary/10">
-          <BrandIcon slug={iconSlug} size={26} />
-        </span>
-        <div>
-          <p className="font-heading text-lg font-medium">{connector.name}</p>
-          <p className="text-sm text-muted-foreground">
-            {connector.connectorType} · {layerLabel(connector.layer)}
-          </p>
-        </div>
-      </div>
-
-      <Card>
-        <CardContent className="grid gap-3 text-sm sm:grid-cols-2">
-          <Field label="Status">
-            <span className="inline-flex items-center gap-1.5">
-              <span
-                className={
-                  connector.status === "connected"
-                    ? "size-1.5 rounded-full bg-green-500"
-                    : "size-1.5 rounded-full bg-muted-foreground"
-                }
-              />
-              {connector.status}
-            </span>
-          </Field>
-          <Field label="Layer">{layerLabel(connector.layer)}</Field>
-          <Field label="Type">{connector.connectorType}</Field>
-          {url && <Field label="URL">{url}</Field>}
-          <Field label="Created">
-            {new Date(connector.createdAt).toLocaleString()}
-          </Field>
-        </CardContent>
-      </Card>
-
-      <p className="text-xs text-muted-foreground">
-        Credentials and the live connection (configure &amp; connect) come in a
-        later step.
-      </p>
-    </div>
-  );
-}
-
-function Field({
-  label,
-  children,
-}: {
-  label: string;
-  children: ReactNode;
-}) {
-  return (
-    <div>
-      <p className="text-xs text-muted-foreground">{label}</p>
-      <p className="truncate">{children}</p>
-    </div>
   );
 }
 

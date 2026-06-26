@@ -2,9 +2,12 @@ import type { Capability, ConnectorDefinition } from "@orbit/connector-sdk";
 import { z } from "zod";
 import {
   ghGet,
+  ghPost,
+  ghRawRequest,
   type GithubConfig,
   type GithubCredentials,
 } from "./client.js";
+import { githubOperations } from "./generated/operations.js";
 
 const configSchema = z.object({
   baseUrl: z.string().url().default("https://api.github.com"),
@@ -118,6 +121,36 @@ const listRepoIssues: Capability = {
   },
 };
 
+const createRepo: Capability = {
+  name: "create_repo",
+  title: "Create a repository",
+  description:
+    "Create a new repository for the authenticated user (requires a token with repo scope).",
+  topic: "repos",
+  readOnly: false,
+  input: z.object({
+    name: z.string().min(1),
+    description: z.string().optional(),
+    private: z.boolean().default(false),
+    autoInit: z.boolean().default(false),
+  }),
+  handler: async (ctx, input) => {
+    const { name, description, private: priv, autoInit } = input as {
+      name: string;
+      description?: string;
+      private: boolean;
+      autoInit: boolean;
+    };
+    const r = await ghPost<GhRepo>(ctx, "/user/repos", {
+      name,
+      description,
+      private: priv,
+      auto_init: autoInit,
+    });
+    return mapRepo(r);
+  },
+};
+
 export const githubConnector: ConnectorDefinition<
   GithubConfig,
   GithubCredentials
@@ -129,41 +162,21 @@ export const githubConnector: ConnectorDefinition<
   icon: "github",
   configSchema,
   credentialsSchema,
-  capabilities: [listOrgRepos, getRepo, listRepoIssues],
+  capabilities: [listOrgRepos, getRepo, listRepoIssues, createRepo],
   api: {
     baseUrl: "https://api.github.com",
-    operations: [
-      {
-        id: "repos.listForOrg",
-        topic: "repos",
-        method: "GET",
-        path: "/orgs/{org}/repos",
-        summary: "List organization repositories",
-        docsUrl:
-          "https://docs.github.com/rest/repos/repos#list-organization-repositories",
-      },
-      {
-        id: "repos.get",
-        topic: "repos",
-        method: "GET",
-        path: "/repos/{owner}/{repo}",
-        summary: "Get a repository",
-        docsUrl: "https://docs.github.com/rest/repos/repos#get-a-repository",
-      },
-      {
-        id: "issues.listForRepo",
-        topic: "issues",
-        method: "GET",
-        path: "/repos/{owner}/{repo}/issues",
-        summary: "List repository issues",
-        docsUrl:
-          "https://docs.github.com/rest/issues/issues#list-repository-issues",
-      },
-    ],
+    // Full REST surface (~1200 ops) generated from GitHub's official OpenAPI
+    // description — see scripts/gen-operations.mjs.
+    operations: githubOperations,
+    // Tier-2 generic invoker: lets the host call ANY operation above (or a raw
+    // method+path) reusing the connected token, without a hand-written handler.
+    request: ghRawRequest,
   },
   testConnection: async (ctx) => {
-    // /rate_limit works with or without a token; cheap reachability + auth check.
-    await ghGet(ctx, "/rate_limit");
+    // With a token, validate it (GET /user → 401 if invalid); without one, just
+    // check reachability with the public /rate_limit endpoint.
+    const { token } = ctx.credentials as GithubCredentials;
+    await ghGet(ctx, token ? "/user" : "/rate_limit");
   },
 };
 

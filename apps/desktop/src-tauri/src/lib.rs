@@ -17,18 +17,27 @@ fn spawn_sidecar() -> Option<Child> {
     c.arg(script);
     c
   } else {
-    // Tauri's externalBin places the sidecar next to the app executable
-    // (`orbit-sidecar`, or `orbit-sidecar.exe` on Windows).
-    let name = if cfg!(windows) {
-      "orbit-sidecar.exe"
+    // Tauri's externalBin places the sidecar and the MCP server next to the app
+    // executable (`orbit-sidecar` / `orbit-mcp`, `.exe` on Windows).
+    let (sidecar_name, mcp_name) = if cfg!(windows) {
+      ("orbit-sidecar.exe", "orbit-mcp.exe")
     } else {
-      "orbit-sidecar"
+      ("orbit-sidecar", "orbit-mcp")
     };
-    let bin = std::env::current_exe()
+    let exe_dir = std::env::current_exe()
       .ok()
-      .and_then(|exe| exe.parent().map(|dir| dir.join(name)))
-      .unwrap_or_else(|| std::path::PathBuf::from(name));
-    Command::new(bin)
+      .and_then(|exe| exe.parent().map(|dir| dir.to_path_buf()));
+    let bin = exe_dir
+      .as_ref()
+      .map(|dir| dir.join(sidecar_name))
+      .unwrap_or_else(|| std::path::PathBuf::from(sidecar_name));
+    let mut c = Command::new(bin);
+    // Tell the sidecar where the bundled MCP binary is, so the MCP config it
+    // hands to the UI points at a Node-free executable.
+    if let Some(dir) = exe_dir.as_ref() {
+      c.env("ORBIT_MCP_BIN", dir.join(mcp_name));
+    }
+    c
   };
 
   match command.spawn() {

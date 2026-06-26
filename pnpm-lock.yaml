@@ -96,6 +96,12 @@ importers:
 
   apps/desktop:
     dependencies:
+      '@modelcontextprotocol/sdk':
+        specifier: ^1.29.0
+        version: 1.29.0(zod@3.25.76)
+      '@orbit/connector-sdk':
+        specifier: workspace:^
+        version: link:../../packages/connector-sdk
       '@orbit/engine':
         specifier: workspace:*
         version: link:../../packages/engine
@@ -132,6 +138,9 @@ importers:
       tw-animate-css:
         specifier: ^1.4.0
         version: 1.4.0
+      zod-to-json-schema:
+        specifier: ^3.24.1
+        version: 3.25.2(zod@3.25.76)
     devDependencies:
       '@tailwindcss/vite':
         specifier: ^4.0.0
@@ -311,6 +320,25 @@ importers:
         specifier: ^5.7.2
         version: 5.9.3
 
+  packages/connectors/anthropic:
+    dependencies:
+      '@orbit/connector-sdk':
+        specifier: workspace:*
+        version: link:../../connector-sdk
+      '@orbit/shared':
+        specifier: workspace:*
+        version: link:../../shared
+      zod:
+        specifier: ^3.24.1
+        version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.2
+        version: 22.20.0
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+
   packages/connectors/github:
     dependencies:
       '@orbit/connector-sdk':
@@ -349,20 +377,48 @@ importers:
         specifier: ^5.7.2
         version: 5.9.3
 
+  packages/connectors/ollama:
+    dependencies:
+      '@orbit/connector-sdk':
+        specifier: workspace:*
+        version: link:../../connector-sdk
+      '@orbit/shared':
+        specifier: workspace:*
+        version: link:../../shared
+      zod:
+        specifier: ^3.24.1
+        version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.2
+        version: 22.20.0
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+
   packages/engine:
     dependencies:
+      '@orbit/connector-anthropic':
+        specifier: workspace:*
+        version: link:../connectors/anthropic
       '@orbit/connector-github':
         specifier: workspace:*
         version: link:../connectors/github
       '@orbit/connector-keycloak':
         specifier: workspace:*
         version: link:../connectors/keycloak
+      '@orbit/connector-ollama':
+        specifier: workspace:*
+        version: link:../connectors/ollama
       '@orbit/connector-sdk':
         specifier: workspace:*
         version: link:../connector-sdk
       '@orbit/shared':
         specifier: workspace:*
         version: link:../shared
+      zod:
+        specifier: ^3.24.1
+        version: 3.25.76
     devDependencies:
       '@types/node':
         specifier: ^22.10.2

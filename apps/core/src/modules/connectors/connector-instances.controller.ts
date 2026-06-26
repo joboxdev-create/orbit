@@ -10,6 +10,7 @@ import {
   Post,
 } from "@nestjs/common";
 import { z } from "zod";
+import type { CallApiInput } from "@orbit/engine";
 import { LayerKind } from "@orbit/shared";
 import { ZodValidationPipe } from "../../common/zod-validation.pipe";
 import { CurrentUser } from "../auth/decorators";
@@ -34,6 +35,21 @@ const RegisterInstanceBody = z.object({
   connectorType: z.string().min(1).optional(),
   layer: LayerKind.optional(),
   config: z.record(z.unknown()).default({}),
+});
+
+const ConnectBody = z.object({
+  credentials: z.record(z.unknown()).default({}),
+});
+
+const CallApiBody = z.object({
+  operationId: z.string().min(1).optional(),
+  method: z.enum(["GET", "POST", "PUT", "PATCH", "DELETE"]).optional(),
+  path: z.string().min(1).optional(),
+  pathParams: z.record(z.union([z.string(), z.number()])).optional(),
+  query: z
+    .record(z.union([z.string(), z.number(), z.boolean()]).optional())
+    .optional(),
+  body: z.unknown().optional(),
 });
 
 const UpdateInstanceBody = z.object({
@@ -70,6 +86,20 @@ export class ConnectorInstancesController {
     return this.service.list(user.userId, projectId);
   }
 
+  @Post("connector-instances/:id/connect")
+  connect(
+    @CurrentUser() user: AuthUser,
+    @Param("id") id: string,
+    @Body(new ZodValidationPipe(ConnectBody)) body: { credentials: unknown },
+  ) {
+    return this.service.connect(user.userId, id, body.credentials);
+  }
+
+  @Post("connector-instances/:id/disconnect")
+  disconnect(@CurrentUser() user: AuthUser, @Param("id") id: string) {
+    return this.service.disconnect(user.userId, id);
+  }
+
   @Patch("connector-instances/:id")
   update(
     @CurrentUser() user: AuthUser,
@@ -93,5 +123,14 @@ export class ConnectorInstancesController {
     @Body() body: unknown,
   ) {
     return this.service.invoke(user.userId, id, name, body ?? {});
+  }
+
+  @Post("connector-instances/:id/api")
+  callApi(
+    @CurrentUser() user: AuthUser,
+    @Param("id") id: string,
+    @Body(new ZodValidationPipe(CallApiBody)) body: CallApiInput,
+  ) {
+    return this.service.callApi(user.userId, id, body);
   }
 }

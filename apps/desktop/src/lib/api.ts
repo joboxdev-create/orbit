@@ -39,6 +39,123 @@ export interface RegisterConnectorInput {
   config?: Record<string, unknown>;
 }
 
+// Minimal JSON Schema shape we render forms from (zod-to-json-schema output).
+export interface JsonSchemaProp {
+  type?: string;
+  enum?: string[];
+  default?: unknown;
+  description?: string;
+  format?: string;
+}
+export interface JsonSchema {
+  type?: string;
+  properties?: Record<string, JsonSchemaProp>;
+  required?: string[];
+}
+export interface CapabilitySchema {
+  name: string;
+  title: string;
+  description: string;
+  topic: string;
+  readOnly: boolean;
+  input: JsonSchema;
+}
+export interface ApiParam {
+  name: string;
+  in: "path" | "query" | "header";
+  required: boolean;
+  description?: string;
+  schema?: JsonSchemaProp;
+}
+export interface ApiOperation {
+  id: string;
+  topic: string;
+  method: string;
+  path: string;
+  summary: string;
+  docsUrl?: string;
+  parameters?: ApiParam[];
+  requestSchema?: JsonSchema;
+}
+export interface ApiCatalogSchema {
+  baseUrl: string | null;
+  /** Whether the Tier-2 generic invoker is available for this connector. */
+  canCall: boolean;
+  operations: ApiOperation[];
+}
+export interface ConnectorSchema {
+  type: string;
+  displayName: string;
+  config: JsonSchema;
+  credentials: JsonSchema;
+  capabilities: CapabilitySchema[];
+  api: ApiCatalogSchema;
+}
+export interface CallApiInput {
+  operationId?: string;
+  method?: string;
+  path?: string;
+  pathParams?: Record<string, string | number>;
+  query?: Record<string, string | number | boolean | undefined>;
+  body?: unknown;
+}
+export interface SavedRequest {
+  id: string;
+  projectId: string;
+  instanceId: string;
+  name: string;
+  topic: string;
+  operationId?: string;
+  method?: string;
+  path?: string;
+  pathParams?: Record<string, string | number>;
+  query?: Record<string, string | number | boolean | undefined>;
+  body?: unknown;
+  createdAt: string;
+}
+export type SaveRequestInput = Omit<
+  SavedRequest,
+  "id" | "projectId" | "instanceId" | "createdAt"
+>;
+export interface McpConfig {
+  key: string;
+  command: string;
+  args: string[];
+  env: Record<string, string>;
+}
+export interface ToolCall {
+  id: string;
+  name: string;
+  input: Record<string, unknown>;
+  /** Whether the underlying capability is read-only (no confirmation needed). */
+  readOnly?: boolean;
+}
+export interface ChatMessage {
+  role: "system" | "user" | "assistant" | "tool";
+  content: string;
+  toolCalls?: ToolCall[];
+  toolCallId?: string;
+  toolName?: string;
+}
+export interface ChatResult {
+  model: string;
+  content: string;
+}
+export interface Conversation {
+  id: string;
+  projectId: string;
+  title: string;
+  instanceId?: string;
+  model?: string;
+  messages: ChatMessage[];
+  createdAt: string;
+  updatedAt: string;
+}
+export interface RawApiResponse {
+  status: number;
+  data: unknown;
+}
+
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     headers: { "content-type": "application/json" },
@@ -85,4 +202,184 @@ export const api = {
     }),
   deleteConnector: (id: string) =>
     req<void>(`/connectors/${id}`, { method: "DELETE" }),
+  connectorSchema: (type: string) =>
+    req<ConnectorSchema>(`/connectors/catalog/${type}/schema`),
+  connect: (id: string, credentials: Record<string, unknown>) =>
+    req<ConnectorInstance>(`/connectors/${id}/connect`, {
+      method: "POST",
+      body: JSON.stringify(credentials),
+    }),
+  disconnect: (id: string) =>
+    req<ConnectorInstance>(`/connectors/${id}/disconnect`, { method: "POST" }),
+  invoke: (id: string, capability: string, input: Record<string, unknown>) =>
+    req<{ capability: string; result: unknown }>(
+      `/connectors/${id}/capabilities/${capability}`,
+      { method: "POST", body: JSON.stringify(input) },
+    ),
+  callApi: (id: string, input: CallApiInput) =>
+    req<RawApiResponse>(`/connectors/${id}/api`, {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+  listSavedRequests: (instanceId: string) =>
+    req<SavedRequest[]>(`/connectors/${instanceId}/saved-requests`),
+  saveRequest: (instanceId: string, input: SaveRequestInput) =>
+    req<SavedRequest>(`/connectors/${instanceId}/saved-requests`, {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+  deleteSavedRequest: (id: string) =>
+    req<void>(`/saved-requests/${id}`, { method: "DELETE" }),
+  mcpConfig: (instanceId: string) =>
+    req<McpConfig>(`/connectors/${instanceId}/mcp-config`),
+  chat: (
+    instanceId: string,
+    input: {
+      model: string;
+      messages: ChatMessage[];
+      system?: string;
+      maxTokens?: number;
+    },
+  ) =>
+    req<ChatResult>(`/connectors/${instanceId}/chat`, {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+  /** Streaming chat: calls onDelta with the accumulated text; returns the full text. */
+  chatStream: async (
+    instanceId: string,
+    input: {
+      model: string;
+      messages: ChatMessage[];
+      system?: string;
+      maxTokens?: number;
+    },
+    onDelta: (full: string) => void,
+  ): Promise<string> => {
+    const res = await fetch(`${BASE}/connectors/${instanceId}/chat/stream`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(input),
+    });
+    if (!res.ok || !res.body) {
+      const body = (await res.json().catch(() => null)) as {
+        error?: string;
+      } | null;
+      throw new Error(body?.error ?? `Request failed (${res.status})`);
+    }
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let full = "";
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      full += decoder.decode(value, { stream: true });
+      onDelta(full);
+    }
+    return full;
+  },
+  /** One model turn with the project's tools — returns text + requested tool calls. */
+  chatTurn: (
+    instanceId: string,
+    input: { model: string; messages: ChatMessage[]; system?: string; maxTokens?: number },
+  ) =>
+    req<{ content: string; toolCalls: ToolCall[] }>(
+      `/connectors/${instanceId}/chat/turn`,
+      { method: "POST", body: JSON.stringify(input) },
+    ),
+  /** Streaming model turn: onText gets the accumulated text; resolves with text + tool calls. */
+  chatTurnStream: async (
+    instanceId: string,
+    input: { model: string; messages: ChatMessage[]; system?: string; maxTokens?: number },
+    onText: (acc: string) => void,
+  ): Promise<{ content: string; toolCalls: ToolCall[] }> => {
+    const res = await fetch(
+      `${BASE}/connectors/${instanceId}/chat/turn/stream`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(input),
+      },
+    );
+    if (!res.ok || !res.body) {
+      const body = (await res.json().catch(() => null)) as {
+        error?: string;
+      } | null;
+      throw new Error(body?.error ?? `Request failed (${res.status})`);
+    }
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let content = "";
+    let toolCalls: ToolCall[] = [];
+    const handle = (line: string) => {
+      if (!line.trim()) return;
+      let ev: { type?: string; value?: unknown };
+      try {
+        ev = JSON.parse(line);
+      } catch {
+        return;
+      }
+      if (ev.type === "text") {
+        content += ev.value as string;
+        onText(content);
+      } else if (ev.type === "tools") {
+        toolCalls = ev.value as ToolCall[];
+      } else if (ev.type === "error") {
+        throw new Error(ev.value as string);
+      }
+    };
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let nl: number;
+      while ((nl = buffer.indexOf("\n")) >= 0) {
+        handle(buffer.slice(0, nl));
+        buffer = buffer.slice(nl + 1);
+      }
+    }
+    if (buffer) handle(buffer);
+    return { content, toolCalls };
+  },
+  /** Execute a tool (by namespaced name) on the right connector. */
+  runTool: (
+    instanceId: string,
+    name: string,
+    input: Record<string, unknown>,
+  ) =>
+    req<{ result: unknown }>(`/connectors/${instanceId}/run-tool`, {
+      method: "POST",
+      body: JSON.stringify({ name, input }),
+    }),
+  listConversations: (projectId: string) =>
+    req<Conversation[]>(`/projects/${projectId}/conversations`),
+  createConversation: (
+    projectId: string,
+    input: {
+      title?: string;
+      instanceId?: string;
+      model?: string;
+      messages?: ChatMessage[];
+    },
+  ) =>
+    req<Conversation>(`/projects/${projectId}/conversations`, {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+  updateConversation: (
+    id: string,
+    patch: {
+      title?: string;
+      instanceId?: string;
+      model?: string;
+      messages?: ChatMessage[];
+    },
+  ) =>
+    req<Conversation>(`/conversations/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(patch),
+    }),
+  deleteConversation: (id: string) =>
+    req<void>(`/conversations/${id}`, { method: "DELETE" }),
 };

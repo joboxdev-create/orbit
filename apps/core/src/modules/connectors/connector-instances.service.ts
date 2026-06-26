@@ -7,19 +7,18 @@ import {
   Logger,
   NotFoundException,
 } from "@nestjs/common";
-import { Prisma } from "@prisma/client";
-import { type ConnectorContext, ConnectorRegistry } from "@orbit/connector-sdk";
+import { ConnectorRegistry } from "@orbit/connector-sdk";
 import {
+  type CallApiInput,
   ConnectorInstanceService as EngineConnectorInstanceService,
   type ConnectorInstanceRecord,
   EngineError,
 } from "@orbit/engine";
-import type { ZodType } from "zod";
 import { PrismaService } from "../../shared/prisma/prisma.service";
-import { CryptoService } from "../../shared/crypto/crypto.service";
 import { AccessControlService } from "../../shared/authz/access-control.service";
 import { CONNECTOR_REGISTRY } from "./connectors.tokens";
 import { PrismaConnectorInstanceRepository } from "./prisma-connector-instance.repository";
+import { PrismaSecretStore } from "./prisma-secret-store";
 
 export interface CreateInstanceInput {
   connectorType: string;
@@ -42,27 +41,14 @@ export interface UpdateInstanceInput {
   config?: Record<string, unknown>;
 }
 
-// Never return the encrypted blob to clients.
-const PUBLIC_FIELDS = {
-  id: true,
-  projectId: true,
-  connectorType: true,
-  layer: true,
-  name: true,
-  status: true,
-  config: true,
-  createdAt: true,
-} satisfies Prisma.ConnectorInstanceSelect;
-
 /**
  * Server adapter over the engine's connector-instance domain logic. This class
  * owns only the server concerns — **governance** (RBAC via AccessControlService)
- * and **transport** (mapping engine errors to HTTP). The actual domain logic for
- * register/list/update/remove lives in {@link EngineConnectorInstanceService},
- * so the desktop host can reuse it over a filesystem store.
- *
- * `create` (configure & connect + testConnection) and `invoke` still run here
- * directly; they move into the engine when the credentialed flows are built.
+ * and **transport** (mapping engine errors to HTTP). All domain logic — register,
+ * list, update, remove, **connect/disconnect/invoke** — lives in
+ * {@link EngineConnectorInstanceService}, so the server and the desktop host
+ * share one credentialed flow; only the {@link SecretStore} adapter differs
+ * (Postgres here, keychain/file on the desktop).
  */
 @Injectable()
 export class ConnectorInstancesService {
@@ -71,60 +57,70 @@ export class ConnectorInstancesService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly crypto: CryptoService,
     private readonly acl: AccessControlService,
     @Inject(CONNECTOR_REGISTRY)
     private readonly registry: ConnectorRegistry,
     repo: PrismaConnectorInstanceRepository,
+    secrets: PrismaSecretStore,
   ) {
     this.instances = new EngineConnectorInstanceService({
       repo,
       registry: this.registry,
+      secrets,
+      fetch: globalThis.fetch,
+      logger: {
+        debug: (m, meta) => this.logger.debug(m, meta),
+        info: (m, meta) => this.logger.log(m, meta),
+        warn: (m, meta) => this.logger.warn(m, meta),
+        error: (m, meta) => this.logger.error(m, meta),
+      },
     });
   }
 
+  /**
+   * One-shot configure & connect: register a catalog instance, then connect it.
+   * If the connection test fails, the just-registered instance is rolled back so
+   * the call stays atomic from the client's point of view.
+   */
   async create(userId: string, projectId: string, input: CreateInstanceInput) {
     const project = await this.requireProject(projectId);
     await this.acl.assertMember(userId, project.orgId, "member");
 
-    const def = this.registry.get(input.connectorType);
-    if (!def) {
-      throw new BadRequestException(
-        `Unknown connector type: ${input.connectorType}`,
-      );
-    }
-
-    const config = this.parseOrThrow<Record<string, unknown>>(
-      def.configSchema,
-      input.config,
-      "config",
-    );
-    const credentials = this.parseOrThrow<Record<string, unknown>>(
-      def.credentialsSchema,
-      input.credentials,
-      "credentials",
-    );
-
-    try {
-      await def.testConnection(this.buildContext(config, credentials));
-    } catch (err) {
-      throw new BadRequestException(
-        `Connection test failed: ${(err as Error).message}`,
-      );
-    }
-
-    return this.prisma.connectorInstance.create({
-      data: {
-        projectId,
-        connectorType: def.type,
-        layer: def.layer,
+    const record = await this.guard(async () => {
+      const registered = await this.instances.register(projectId, {
+        source: "catalog",
         name: input.name,
-        status: "connected",
-        config: config as Prisma.InputJsonValue,
-        encryptedCredentials: this.crypto.encryptJson(credentials),
-      },
-      select: PUBLIC_FIELDS,
+        connectorType: input.connectorType,
+        config: input.config,
+      });
+      try {
+        return await this.instances.connect(registered.id, input.credentials);
+      } catch (err) {
+        await this.instances.remove(registered.id).catch(() => {});
+        throw err;
+      }
     });
+    return toPublic(record);
+  }
+
+  /** Configure & connect an already-registered instance (validate + testConnection). */
+  async connect(userId: string, instanceId: string, rawCredentials: unknown) {
+    const instance = await this.requireInstance(instanceId);
+    await this.acl.assertMember(userId, instance.project.orgId, "member");
+    const record = await this.guard(() =>
+      this.instances.connect(instanceId, rawCredentials),
+    );
+    return toPublic(record);
+  }
+
+  /** Drop stored credentials and return the instance to `configured`. */
+  async disconnect(userId: string, instanceId: string) {
+    const instance = await this.requireInstance(instanceId);
+    await this.acl.assertMember(userId, instance.project.orgId, "member");
+    const record = await this.guard(() =>
+      this.instances.disconnect(instanceId),
+    );
+    return toPublic(record);
   }
 
   async register(
@@ -169,13 +165,7 @@ export class ConnectorInstancesService {
     capabilityName: string,
     rawInput: unknown,
   ) {
-    const instance = await this.prisma.connectorInstance.findUnique({
-      where: { id: instanceId },
-      include: { project: { select: { orgId: true } } },
-    });
-    if (!instance) {
-      throw new NotFoundException(`Connector instance not found: ${instanceId}`);
-    }
+    const instance = await this.requireInstance(instanceId);
 
     const def = this.registry.get(instance.connectorType);
     if (!def) {
@@ -191,25 +181,37 @@ export class ConnectorInstancesService {
       );
     }
 
+    // RBAC: mutating capabilities require `member`, read-only only `viewer`.
     await this.acl.assertMember(
       userId,
       instance.project.orgId,
       capability.readOnly ? "viewer" : "member",
     );
 
-    const input = this.parseOrThrow(capability.input, rawInput, "input");
-    const credentials = instance.encryptedCredentials
-      ? this.crypto.decryptJson<Record<string, unknown>>(
-          instance.encryptedCredentials,
-        )
-      : {};
-    const config = (instance.config ?? {}) as Record<string, unknown>;
-
-    const result = await capability.handler(
-      this.buildContext(config, credentials),
-      input,
+    return this.guard(() =>
+      this.instances.invoke(instanceId, capabilityName, rawInput),
     );
-    return { capability: capability.name, result };
+  }
+
+  /** Generic (Tier-2) raw API call — the no-AI "call any operation" path. */
+  async callApi(userId: string, instanceId: string, input: CallApiInput) {
+    const instance = await this.requireInstance(instanceId);
+
+    // Resolve the HTTP verb for RBAC: a catalogued operation carries its own
+    // method; a raw call uses the given one. Anything but GET may mutate.
+    const def = this.registry.get(instance.connectorType);
+    let method = input.method;
+    if (input.operationId) {
+      const op = def?.api?.operations.find((o) => o.id === input.operationId);
+      method = op?.method ?? method;
+    }
+    await this.acl.assertMember(
+      userId,
+      instance.project.orgId,
+      method === "GET" ? "viewer" : "member",
+    );
+
+    return this.guard(() => this.instances.callApi(instanceId, input));
   }
 
   private async requireProject(projectId: string) {
@@ -252,34 +254,6 @@ export class ConnectorInstancesService {
       }
       throw err;
     }
-  }
-
-  private parseOrThrow<T>(schema: ZodType, value: unknown, label: string): T {
-    const result = schema.safeParse(value);
-    if (!result.success) {
-      throw new BadRequestException({
-        message: `Invalid ${label}`,
-        issues: result.error.flatten(),
-      });
-    }
-    return result.data as T;
-  }
-
-  private buildContext(
-    config: Record<string, unknown>,
-    credentials: Record<string, unknown>,
-  ): ConnectorContext {
-    return {
-      config,
-      credentials,
-      fetch: globalThis.fetch,
-      logger: {
-        debug: (m, meta) => this.logger.debug(m, meta),
-        info: (m, meta) => this.logger.log(m, meta),
-        warn: (m, meta) => this.logger.warn(m, meta),
-        error: (m, meta) => this.logger.error(m, meta),
-      },
-    };
   }
 }
 

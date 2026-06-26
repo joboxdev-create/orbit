@@ -3,19 +3,26 @@ import {
   ChevronLeft,
   FolderGit2,
   LayoutDashboard,
-  MessageSquare,
   Network,
+  Plus,
 } from "lucide-react";
-import type { CatalogEntry, ConnectorInstance, Project } from "@/lib/api";
+import type {
+  CatalogEntry,
+  ConnectorInstance,
+  Conversation,
+  Project,
+} from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 import { CreateProjectDialog } from "./create-project-dialog";
 import { CreateConnectorDialog } from "./create-connector-dialog";
 import { ConnectorRow } from "./connector-row";
+import { ChatSessionRow } from "./chat-session-row";
 
 export type ProjectView =
   | { kind: "overview" }
   | { kind: "graph" }
-  | { kind: "chat" }
+  | { kind: "chat"; conversationId?: string }
   | { kind: "connector"; id: string };
 
 interface SidebarProps {
@@ -27,9 +34,12 @@ interface SidebarProps {
   onCreatedProject: () => void;
   connectors: ConnectorInstance[];
   catalog: CatalogEntry[];
+  conversations: Conversation[];
   view: ProjectView;
   onView: (v: ProjectView) => void;
   onConnectorsChanged: () => void;
+  onConversationsChanged: () => void;
+  onNewChat: () => void;
 }
 
 export function Sidebar(props: SidebarProps) {
@@ -89,10 +99,13 @@ function ProjectNav({
   selected,
   connectors,
   catalog,
+  conversations,
   view,
   onBack,
   onView,
   onConnectorsChanged,
+  onConversationsChanged,
+  onNewChat,
 }: SidebarProps & { selected: Project }) {
   return (
     <>
@@ -116,19 +129,50 @@ function ProjectNav({
         Overview
       </NavButton>
       <NavButton
-        active={view.kind === "chat"}
-        onClick={() => onView({ kind: "chat" })}
-      >
-        <MessageSquare size={15} />
-        Chat
-      </NavButton>
-      <NavButton
         active={view.kind === "graph"}
         onClick={() => onView({ kind: "graph" })}
       >
         <Network size={15} />
         Graph
       </NavButton>
+
+      <Separator />
+
+      <div className="flex items-center justify-between px-2 py-1">
+        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          Chat
+        </p>
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          className="text-muted-foreground hover:text-foreground"
+          onClick={onNewChat}
+          title="New chat"
+        >
+          <Plus size={14} />
+          <span className="sr-only">New chat</span>
+        </Button>
+      </div>
+
+      {conversations.length === 0 ? (
+        <p className="px-2 py-1 text-xs text-muted-foreground">No chats yet.</p>
+      ) : (
+        <div className="flex flex-col gap-0.5">
+          {conversations.map((c) => (
+            <ChatSessionRow
+              key={c.id}
+              conversation={c}
+              active={
+                view.kind === "chat" && view.conversationId === c.id
+              }
+              onSelect={() =>
+                onView({ kind: "chat", conversationId: c.id })
+              }
+              onChanged={onConversationsChanged}
+            />
+          ))}
+        </div>
+      )}
 
       <Separator />
 

@@ -4,3 +4,5 @@
 export * from "./file-workspace.js";
 export * from "./fs-project-repository.js";
 export * from "./fs-connector-instance-repository.js";
+export * from "./fs-saved-request-repository.js";
+export * from "./fs-conversation-repository.js";

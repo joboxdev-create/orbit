@@ -3,3 +3,6 @@
 // server-only layer that sits above these ports.
 export * from "./project.js";
 export * from "./connector-instance.js";
+export * from "./secret-store.js";
+export * from "./saved-request.js";
+export * from "./conversation.js";

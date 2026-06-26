@@ -1,0 +1,5 @@
+{
+  "main": ".mcp-build/server.cjs",
+  "output": ".mcp-build/sea-prep.blob",
+  "disableExperimentalSEAWarning": true
+}

@@ -1,5 +1,5 @@
 {
-  "name": "@orbit/engine",
+  "name": "@orbit/connector-ollama",
   "version": "0.0.0",
   "private": true,
   "main": "./dist/index.js",
@@ -17,10 +17,6 @@
     "clean": "rm -rf dist .turbo"
   },
   "dependencies": {
-    "@orbit/connector-anthropic": "workspace:*",
-    "@orbit/connector-github": "workspace:*",
-    "@orbit/connector-keycloak": "workspace:*",
-    "@orbit/connector-ollama": "workspace:*",
     "@orbit/connector-sdk": "workspace:*",
     "@orbit/shared": "workspace:*",
     "zod": "^3.24.1"

@@ -4,6 +4,7 @@ import { ConnectorsController } from "./connectors.controller";
 import { ConnectorInstancesController } from "./connector-instances.controller";
 import { ConnectorInstancesService } from "./connector-instances.service";
 import { PrismaConnectorInstanceRepository } from "./prisma-connector-instance.repository";
+import { PrismaSecretStore } from "./prisma-secret-store";
 import { CONNECTOR_REGISTRY } from "./connectors.tokens";
 
 @Module({
@@ -11,6 +12,7 @@ import { CONNECTOR_REGISTRY } from "./connectors.tokens";
   providers: [
     ConnectorInstancesService,
     PrismaConnectorInstanceRepository,
+    PrismaSecretStore,
     {
       // The default connector catalogue comes from the shared engine, so the
       // server and the future desktop host expose the same connectors.
