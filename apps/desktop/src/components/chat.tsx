@@ -9,6 +9,7 @@ import {
 } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { ChatToolsMenu } from "@/components/chat-tools-menu";
 import {
   Select,
   SelectContent,
@@ -98,7 +99,8 @@ export function Chat({
     const selected = modelConnectors.find((c) => c.id === instanceId);
     const toolCapable =
       selected?.connectorType === "anthropic" ||
-      selected?.connectorType === "ollama";
+      selected?.connectorType === "ollama" ||
+      selected?.connectorType === "openai";
     const hasTools = connectors.some(
       (c) => c.layer !== "model" && c.status === "connected",
     );
@@ -395,8 +397,9 @@ export function Chat({
           className="w-full resize-none bg-transparent px-3 pb-1 pt-3 text-sm focus-visible:outline-none"
         />
         <div className="flex items-center justify-between gap-2 px-2 pb-2">
-          {/* Options (placeholders, coming soon) */}
+          {/* Options */}
           <div className="flex items-center gap-1">
+            <ChatToolsMenu projectId={conversation.projectId} />
             <Button
               size="icon"
               variant="ghost"

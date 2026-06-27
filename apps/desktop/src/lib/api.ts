@@ -18,6 +18,8 @@ export interface ConnectorInstance {
   name: string;
   status: string;
   config: Record<string, unknown>;
+  /** Curated capabilities (by name) excluded from the project's chat tool pool. */
+  disabledCapabilities: string[];
   createdAt: string;
 }
 
@@ -83,6 +85,17 @@ export interface ApiCatalogSchema {
   canCall: boolean;
   operations: ApiOperation[];
 }
+export interface OfficialMcpSpec {
+  transport: McpTransport;
+  command?: string;
+  args?: string[];
+  env?: Record<string, string>;
+  url?: string;
+  headers?: Record<string, string>;
+  secretKeys?: string[];
+  description?: string;
+  docsUrl?: string;
+}
 export interface ConnectorSchema {
   type: string;
   displayName: string;
@@ -90,6 +103,7 @@ export interface ConnectorSchema {
   credentials: JsonSchema;
   capabilities: CapabilitySchema[];
   api: ApiCatalogSchema;
+  officialMcp: OfficialMcpSpec | null;
 }
 export interface CallApiInput {
   operationId?: string;
@@ -155,6 +169,56 @@ export interface RawApiResponse {
   status: number;
   data: unknown;
 }
+export type McpTransport = "stdio" | "http" | "sse";
+export interface McpServer {
+  id: string;
+  projectId: string;
+  connectorInstanceId: string;
+  name: string;
+  transport: McpTransport;
+  command: string;
+  args: string[];
+  env: Record<string, string>;
+  url?: string;
+  headers?: Record<string, string>;
+  status: "configured" | "connected" | "error";
+  enabled: boolean;
+  toolCount?: number;
+  lastError?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+export interface CreateMcpServerInput {
+  name: string;
+  transport?: McpTransport;
+  // stdio
+  command?: string;
+  args?: string[];
+  env?: Record<string, string>;
+  secretEnv?: Record<string, string>;
+  // http / sse
+  url?: string;
+  headers?: Record<string, string>;
+  secretHeaders?: Record<string, string>;
+}
+export interface McpToolDescriptor {
+  name: string;
+  description?: string;
+  inputSchema: unknown;
+  readOnly: boolean;
+}
+/** A server found in another client's config on this machine (read-only). */
+export interface DiscoveredMcpServer {
+  source: string;
+  sourcePath: string;
+  name: string;
+  transport: McpTransport;
+  command?: string;
+  args?: string[];
+  url?: string;
+  env?: Record<string, string>;
+  headers?: Record<string, string>;
+}
 
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
@@ -194,7 +258,12 @@ export const api = {
     }),
   updateConnector: (
     id: string,
-    input: { name?: string; layer?: string; config?: Record<string, unknown> },
+    input: {
+      name?: string;
+      layer?: string;
+      config?: Record<string, unknown>;
+      disabledCapabilities?: string[];
+    },
   ) =>
     req<ConnectorInstance>(`/connectors/${id}`, {
       method: "PATCH",
@@ -382,4 +451,58 @@ export const api = {
     }),
   deleteConversation: (id: string) =>
     req<void>(`/conversations/${id}`, { method: "DELETE" }),
+  // ── MCP servers (inbound tool sources, owned by a connector instance) ────
+  discoverMcpServers: () =>
+    req<DiscoveredMcpServer[]>(`/mcp/discover`),
+  listProjectMcpServers: (projectId: string) =>
+    req<McpServer[]>(`/projects/${projectId}/mcp-servers`),
+  listMcpServers: (connectorInstanceId: string) =>
+    req<McpServer[]>(`/connectors/${connectorInstanceId}/mcp-servers`),
+  createMcpServer: (
+    connectorInstanceId: string,
+    input: CreateMcpServerInput,
+  ) =>
+    req<McpServer>(`/connectors/${connectorInstanceId}/mcp-servers`, {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+  updateMcpServer: (
+    id: string,
+    patch: {
+      name?: string;
+      transport?: McpTransport;
+      command?: string;
+      args?: string[];
+      env?: Record<string, string>;
+      url?: string;
+      headers?: Record<string, string>;
+      enabled?: boolean;
+    },
+  ) =>
+    req<McpServer>(`/mcp-servers/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(patch),
+    }),
+  setMcpServerEnabled: (id: string, enabled: boolean) =>
+    req<McpServer>(`/mcp-servers/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ enabled }),
+    }),
+  deleteMcpServer: (id: string) =>
+    req<void>(`/mcp-servers/${id}`, { method: "DELETE" }),
+  connectMcpServer: (
+    id: string,
+    secrets?: {
+      secretEnv?: Record<string, string>;
+      secretHeaders?: Record<string, string>;
+    },
+  ) =>
+    req<McpServer>(`/mcp-servers/${id}/connect`, {
+      method: "POST",
+      body: JSON.stringify(secrets ?? {}),
+    }),
+  disconnectMcpServer: (id: string) =>
+    req<McpServer>(`/mcp-servers/${id}/disconnect`, { method: "POST" }),
+  mcpServerTools: (id: string) =>
+    req<McpToolDescriptor[]>(`/mcp-servers/${id}/tools`),
 };

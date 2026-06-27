@@ -23,6 +23,11 @@ export interface ConnectorInstanceRecord {
   status: ConnectorInstanceStatus;
   /** Non-secret, connector-defined configuration. */
   config: Record<string, unknown>;
+  /** Curated capabilities (by name) excluded from the project's chat tool pool —
+   *  e.g. to avoid duplicating a tool the connector's official MCP also exposes.
+   *  The capability still works on the direct (no-AI) path; it just won't be
+   *  offered to the agent. Empty/absent = all capabilities are tools. */
+  disabledCapabilities: string[];
   /** AES-256-GCM blob (see CryptoEngine); `null` until credentials are set. */
   encryptedCredentials: string | null;
   /** ISO-8601 timestamp. */
@@ -44,6 +49,7 @@ export interface UpdateConnectorInstanceData {
   layer?: string;
   status?: ConnectorInstanceStatus;
   config?: Record<string, unknown>;
+  disabledCapabilities?: string[];
   encryptedCredentials?: string | null;
 }
 

@@ -177,15 +177,23 @@ function DeleteProjectDialog({
   onOpenChange: (o: boolean) => void;
   onDeleted: () => void;
 }) {
+  const [confirm, setConfirm] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const match = confirm === project.name;
+
+  function handleOpenChange(o: boolean) {
+    if (!o) setConfirm("");
+    onOpenChange(o);
+  }
 
   async function onConfirm() {
+    if (!match) return;
     setPending(true);
     setError(null);
     try {
       await api.deleteProject(project.id);
-      onOpenChange(false);
+      handleOpenChange(false);
       onDeleted();
     } catch (e) {
       setError((e as Error).message);
@@ -194,17 +202,30 @@ function DeleteProjectDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-sm">
         <DialogHeader>
           <DialogTitle>Delete project</DialogTitle>
         </DialogHeader>
         <p className="text-sm text-muted-foreground">
-          Delete{" "}
+          This will delete{" "}
           <span className="font-medium text-foreground">{project.name}</span> and
-          its <span className="font-mono text-xs">.orbit/</span> folder? This
-          removes it from disk and cannot be undone.
+          its <span className="font-mono text-xs">.orbit/</span> folder from disk.
+          This action cannot be undone.
         </p>
+        <div className="space-y-1.5">
+          <Label htmlFor="dp-confirm">
+            Type <span className="font-medium text-foreground">{project.name}</span> to confirm
+          </Label>
+          <Input
+            id="dp-confirm"
+            value={confirm}
+            onChange={(e) => setConfirm(e.target.value)}
+            placeholder={project.name}
+            autoComplete="off"
+            onPaste={(e) => e.preventDefault()}
+          />
+        </div>
         {error && (
           <p className="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive">
             {error}
@@ -213,12 +234,16 @@ function DeleteProjectDialog({
         <div className="flex justify-end gap-2">
           <Button
             variant="outline"
-            onClick={() => onOpenChange(false)}
+            onClick={() => handleOpenChange(false)}
             disabled={pending}
           >
             Cancel
           </Button>
-          <Button variant="destructive" onClick={onConfirm} disabled={pending}>
+          <Button
+            variant="destructive"
+            onClick={onConfirm}
+            disabled={!match || pending}
+          >
             {pending ? "Deleting…" : "Delete"}
           </Button>
         </div>

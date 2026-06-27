@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { ArrowRight, FolderGit2, Network, Plug } from "lucide-react";
+import { useState, useEffect } from "react";
+import { ArrowRight, FolderGit2, MoreVertical, Network, Pencil, Plug, RefreshCw, Trash2 } from "lucide-react";
 import { LAYER_LABELS } from "@orbit/shared";
 import {
   api,
@@ -12,10 +12,28 @@ import { Navbar } from "./components/app-shell/navbar";
 import { Sidebar, type ProjectView } from "./components/app-shell/sidebar";
 import { ComingSoon } from "./components/app-shell/coming-soon";
 import { ProjectActions } from "./components/app-shell/project-actions";
+import {
+  EditConnectorDialog,
+  DeleteConnectorDialog,
+} from "./components/app-shell/connector-row";
 import { ConnectorDetail } from "./components/connector-detail";
 import { Chat } from "./components/chat";
 import { BrandIcon } from "./components/ui/brand-icon";
+import { Button } from "./components/ui/button";
 import { Card, CardContent } from "./components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "./components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "./components/ui/dropdown-menu";
 
 function workspaceName(path: string | null): string {
   if (!path) return "Workspace";
@@ -156,6 +174,7 @@ export default function App() {
               }}
               onConnectorChanged={() => void onConnectorsChanged()}
               onConversationsChanged={() => void onConversationsChanged()}
+              onViewChange={setView}
             />
           ) : (
             <ProjectsLanding
@@ -180,6 +199,7 @@ function ProjectMain({
   onProjectDeleted,
   onConnectorChanged,
   onConversationsChanged,
+  onViewChange,
 }: {
   project: Project;
   view: ProjectView;
@@ -190,6 +210,7 @@ function ProjectMain({
   onProjectDeleted: () => void;
   onConnectorChanged: () => void;
   onConversationsChanged: () => void;
+  onViewChange: (v: ProjectView) => void;
 }) {
   const connector =
     view.kind === "connector"
@@ -207,15 +228,39 @@ function ProjectMain({
           <h1 className="font-heading text-2xl font-semibold tracking-tight">
             {project.name}
           </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <p className="mt-1 text-muted-foreground text-sm">
             Project · {project.slug}
           </p>
         </div>
-        <ProjectActions
-          project={project}
-          onChanged={onProjectChanged}
-          onDeleted={onProjectDeleted}
-        />
+        {view.kind === "overview" && (
+          <ProjectActions
+            project={project}
+            onChanged={onProjectChanged}
+            onDeleted={onProjectDeleted}
+          />
+        )}
+        {view.kind === "graph" && <GraphActions />}
+        {view.kind === "chat" && conversation && (
+          <ChatActions
+            conversation={conversation}
+            onRenamed={onConversationsChanged}
+            onCleared={onConversationsChanged}
+            onDeleted={() => {
+              onConversationsChanged();
+              onViewChange({ kind: "chat" });
+            }}
+          />
+        )}
+        {view.kind === "connector" && connector && (
+          <ConnectorActions
+            connector={connector}
+            onChanged={onConnectorChanged}
+            onDeleted={() => {
+              onConnectorChanged();
+              onViewChange({ kind: "overview" });
+            }}
+          />
+        )}
       </div>
 
       {view.kind === "overview" && (
@@ -358,5 +403,208 @@ function ProjectsLanding({
         </div>
       )}
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Contextual kebab menus for each project view
+// ---------------------------------------------------------------------------
+
+function GraphActions() {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" size="icon-sm">
+          <MoreVertical size={16} />
+          <span className="sr-only">Graph actions</span>
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent className="w-44">
+        <DropdownMenuItem disabled>
+          <RefreshCw size={14} />
+          Refresh graph
+        </DropdownMenuItem>
+        <DropdownMenuItem disabled>
+          <Network size={14} />
+          Export as image
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function ChatActions({
+  conversation,
+  onRenamed,
+  onCleared,
+  onDeleted,
+}: {
+  conversation: Conversation;
+  onRenamed: () => void;
+  onCleared: () => void;
+  onDeleted: () => void;
+}) {
+  const [renameOpen, setRenameOpen] = useState(false);
+  const [clearOpen, setClearOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [title, setTitle] = useState(conversation.title);
+  const [pending, setPending] = useState(false);
+
+  async function rename(e: React.FormEvent) {
+    e.preventDefault();
+    setPending(true);
+    try {
+      await api.updateConversation(conversation.id, { title });
+      setRenameOpen(false);
+      onRenamed();
+    } finally {
+      setPending(false);
+    }
+  }
+
+  async function clear() {
+    setPending(true);
+    try {
+      await api.updateConversation(conversation.id, { messages: [] });
+      setClearOpen(false);
+      onCleared();
+    } finally {
+      setPending(false);
+    }
+  }
+
+  async function del() {
+    setPending(true);
+    try {
+      await api.deleteConversation(conversation.id);
+      setDeleteOpen(false);
+      onDeleted();
+    } finally {
+      setPending(false);
+    }
+  }
+
+  return (
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" size="icon-sm">
+            <MoreVertical size={16} />
+            <span className="sr-only">Chat actions</span>
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent className="w-36">
+          <DropdownMenuItem onSelect={() => { setTitle(conversation.title); setRenameOpen(true); }}>
+            <Pencil size={14} />
+            Rename
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => setClearOpen(true)}>
+            <RefreshCw size={14} />
+            Clear
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem variant="destructive" onSelect={() => setDeleteOpen(true)}>
+            <Trash2 size={14} />
+            Delete
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      <Dialog open={renameOpen} onOpenChange={setRenameOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>Rename chat</DialogTitle></DialogHeader>
+          <form onSubmit={rename} className="space-y-4">
+            <input
+              className="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-ring"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              required
+              autoFocus
+            />
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => setRenameOpen(false)}>Cancel</Button>
+              <Button type="submit" disabled={pending}>{pending ? "Saving…" : "Save"}</Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={clearOpen} onOpenChange={setClearOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>Clear chat</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground">Remove all messages from this chat? The session will remain in the sidebar.</p>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setClearOpen(false)} disabled={pending}>Cancel</Button>
+            <Button variant="destructive" onClick={clear} disabled={pending}>{pending ? "Clearing…" : "Clear"}</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>Delete chat</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Delete <span className="font-medium text-foreground">{conversation.title}</span>? This cannot be undone.
+          </p>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setDeleteOpen(false)} disabled={pending}>Cancel</Button>
+            <Button variant="destructive" onClick={del} disabled={pending}>{pending ? "Deleting…" : "Delete"}</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
+function ConnectorActions({
+  connector,
+  onChanged,
+  onDeleted,
+}: {
+  connector: ConnectorInstance;
+  onChanged: () => void;
+  onDeleted: () => void;
+}) {
+  const [editOpen, setEditOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+
+  return (
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" size="icon-sm">
+            <MoreVertical size={16} />
+            <span className="sr-only">Connector actions</span>
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent className="w-36">
+          <DropdownMenuItem onSelect={() => setEditOpen(true)}>
+            <Pencil size={14} />
+            Edit
+          </DropdownMenuItem>
+          <DropdownMenuItem variant="destructive" onSelect={() => setDeleteOpen(true)}>
+            <Trash2 size={14} />
+            Delete
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      {editOpen && (
+        <EditConnectorDialog
+          connector={connector}
+          open={editOpen}
+          onOpenChange={setEditOpen}
+          onSaved={onChanged}
+        />
+      )}
+      {deleteOpen && (
+        <DeleteConnectorDialog
+          connector={connector}
+          open={deleteOpen}
+          onOpenChange={setDeleteOpen}
+          onDeleted={onDeleted}
+        />
+      )}
+    </>
   );
 }

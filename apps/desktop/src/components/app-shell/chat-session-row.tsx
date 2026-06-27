@@ -34,11 +34,11 @@ export function ChatSessionRow({
   const [deleteOpen, setDeleteOpen] = useState(false);
 
   return (
-    <div className="group/row relative flex items-center">
+    <div className="group/row relative flex min-w-0 items-center">
       <button
         onClick={onSelect}
         className={cn(
-          "flex flex-1 items-center gap-2.5 rounded-md px-2.5 py-1.5 pr-7 text-left text-sm transition-colors",
+          "flex min-w-0 flex-1 items-center gap-2.5 rounded-md px-2.5 py-1.5 pr-7 text-left text-sm transition-colors",
           active
             ? "bg-accent font-medium text-accent-foreground"
             : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",

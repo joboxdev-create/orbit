@@ -3,6 +3,7 @@ import { anthropicConnector } from "@orbit/connector-anthropic";
 import { githubConnector } from "@orbit/connector-github";
 import { keycloakConnector } from "@orbit/connector-keycloak";
 import { ollamaConnector } from "@orbit/connector-ollama";
+import { openaiConnector } from "@orbit/connector-openai";
 
 /**
  * The default set of code-backed connectors available in any Orbit host
@@ -17,5 +18,6 @@ export function createDefaultRegistry(): ConnectorRegistry {
   registry.register(keycloakConnector);
   registry.register(ollamaConnector);
   registry.register(anthropicConnector);
+  registry.register(openaiConnector);
   return registry;
 }

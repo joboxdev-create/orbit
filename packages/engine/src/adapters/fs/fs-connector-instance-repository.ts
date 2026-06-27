@@ -38,6 +38,7 @@ export class FsConnectorInstanceRepository
       name: data.name,
       status: data.status ?? "configured",
       config: data.config ?? {},
+      disabledCapabilities: [],
       encryptedCredentials: data.encryptedCredentials ?? null,
       createdAt: new Date().toISOString(),
     };
@@ -71,6 +72,9 @@ export class FsConnectorInstanceRepository
       ...(patch.layer !== undefined && { layer: patch.layer }),
       ...(patch.status !== undefined && { status: patch.status }),
       ...(patch.config !== undefined && { config: patch.config }),
+      ...(patch.disabledCapabilities !== undefined && {
+        disabledCapabilities: patch.disabledCapabilities,
+      }),
       ...(patch.encryptedCredentials !== undefined && {
         encryptedCredentials: patch.encryptedCredentials,
       }),

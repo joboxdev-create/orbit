@@ -113,7 +113,7 @@ export function ConnectorRow({
   );
 }
 
-function EditConnectorDialog({
+export function EditConnectorDialog({
   connector,
   open,
   onOpenChange,
@@ -219,7 +219,7 @@ function EditConnectorDialog({
   );
 }
 
-function DeleteConnectorDialog({
+export function DeleteConnectorDialog({
   connector,
   open,
   onOpenChange,

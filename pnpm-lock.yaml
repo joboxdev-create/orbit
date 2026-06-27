@@ -396,8 +396,30 @@ importers:
         specifier: ^5.7.2
         version: 5.9.3
 
+  packages/connectors/openai:
+    dependencies:
+      '@orbit/connector-sdk':
+        specifier: workspace:*
+        version: link:../../connector-sdk
+      '@orbit/shared':
+        specifier: workspace:*
+        version: link:../../shared
+      zod:
+        specifier: ^3.24.1
+        version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.2
+        version: 22.20.0
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+
   packages/engine:
     dependencies:
+      '@modelcontextprotocol/sdk':
+        specifier: ^1.29.0
+        version: 1.29.0(zod@3.25.76)
       '@orbit/connector-anthropic':
         specifier: workspace:*
         version: link:../connectors/anthropic
@@ -410,6 +432,9 @@ importers:
       '@orbit/connector-ollama':
         specifier: workspace:*
         version: link:../connectors/ollama
+      '@orbit/connector-openai':
+        specifier: workspace:*
+        version: link:../connectors/openai
       '@orbit/connector-sdk':
         specifier: workspace:*
         version: link:../connector-sdk

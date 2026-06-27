@@ -18,20 +18,25 @@ import {
   ConversationService,
   type CreateConversationData,
   createDefaultRegistry,
+  type CreateMcpServerData,
   type CreateProjectData,
   type CreateSavedRequestData,
   EngineError,
   FsConnectorInstanceRepository,
   FsConversationRepository,
+  FsMcpServerRepository,
   FsProjectRepository,
   FsSavedRequestRepository,
+  McpService,
   type RegisterConnectorInput,
   SavedRequestService,
   type UpdateConnectorInput,
   type UpdateConversationData,
+  type UpdateMcpServerData,
   type UpdateProjectData,
 } from "@orbit/engine";
 import { zodToJsonSchema } from "zod-to-json-schema";
+import { discoverMcpServers } from "./mcp-discovery.js";
 import { FileSecretStore } from "./fs-secret-store.js";
 
 const WORKSPACE =
@@ -61,10 +66,13 @@ const secrets = new FileSecretStore(
   join(ORBIT_HOME, "secrets.json"),
   loadOrCreateKey(join(ORBIT_HOME, "secret.key")),
 );
+const mcpServers = new FsMcpServerRepository(WORKSPACE);
+const mcp = new McpService({ repo: mcpServers, secrets });
 const connectorService = new ConnectorInstanceService({
   repo: connectors,
   registry,
   secrets,
+  mcp,
   fetch: globalThis.fetch,
 });
 const savedRequests = new SavedRequestService(
@@ -144,6 +152,8 @@ function connectorSchema(type: string) {
       canCall: Boolean(def.api?.request),
       operations: def.api?.operations ?? [],
     },
+    // The service's official MCP server (if any), suggested in the MCP tab.
+    officialMcp: def.officialMcp ?? null,
   };
 }
 
@@ -350,6 +360,90 @@ const server = createServer(async (req, res) => {
         return send(res, 204);
       }
     }
+    // ── MCP servers (inbound tool sources, owned by a connector instance) ──
+    // Read-only discovery of MCP servers configured in other clients on this
+    // machine (Claude Desktop / Cursor / Windsurf). Nothing is persisted.
+    if (path === "/mcp/discover" && method === "GET") {
+      return send(res, 200, await discoverMcpServers());
+    }
+    // Every MCP server in a project — the chat's tool-source list (toggle which
+    // contribute tools to the agent).
+    if (
+      (m = path.match(/^\/projects\/([^/]+)\/mcp-servers$/)) &&
+      method === "GET"
+    ) {
+      return send(res, 200, await mcpServers.listByProject(m[1]!));
+    }
+    if ((m = path.match(/^\/connectors\/([^/]+)\/mcp-servers$/))) {
+      const connectorInstanceId = m[1]!;
+      if (method === "GET") {
+        return send(
+          res,
+          200,
+          await mcpServers.listByConnectorInstance(connectorInstanceId),
+        );
+      }
+      if (method === "POST") {
+        const instance = await connectors.findById(connectorInstanceId);
+        if (!instance) return send(res, 404, { error: "connector not found" });
+        const body = await readBody<
+          Omit<CreateMcpServerData, "projectId" | "connectorInstanceId"> & {
+            // Secret values kept out of `.orbit/`: env vars (stdio) or auth
+            // headers (http/sse). Either is stored under the server id.
+            secretEnv?: Record<string, string>;
+            secretHeaders?: Record<string, string>;
+          }
+        >(req);
+        const { secretEnv, secretHeaders, ...data } = body;
+        const created = await mcpServers.create({
+          ...data,
+          projectId: instance.projectId,
+          connectorInstanceId,
+        });
+        const secretValues = { ...secretEnv, ...secretHeaders };
+        if (Object.keys(secretValues).length) {
+          await secrets.set(created.id, secretValues);
+        }
+        return send(res, 201, created);
+      }
+    }
+    if (
+      (m = path.match(/^\/mcp-servers\/([^/]+)\/connect$/)) &&
+      method === "POST"
+    ) {
+      const body = await readBody<{
+        secretEnv?: Record<string, string>;
+        secretHeaders?: Record<string, string>;
+      }>(req);
+      const secretValues = { ...body.secretEnv, ...body.secretHeaders };
+      if (Object.keys(secretValues).length) {
+        await secrets.set(m[1]!, secretValues);
+      }
+      return send(res, 200, await mcp.connect(m[1]!));
+    }
+    if (
+      (m = path.match(/^\/mcp-servers\/([^/]+)\/disconnect$/)) &&
+      method === "POST"
+    ) {
+      return send(res, 200, await mcp.disconnect(m[1]!));
+    }
+    if ((m = path.match(/^\/mcp-servers\/([^/]+)\/tools$/)) && method === "GET") {
+      return send(res, 200, await mcp.listTools(m[1]!));
+    }
+    if ((m = path.match(/^\/mcp-servers\/([^/]+)$/))) {
+      const id = m[1]!;
+      if (method === "PATCH") {
+        const body = await readBody<UpdateMcpServerData>(req);
+        return send(res, 200, await mcpServers.update(id, body));
+      }
+      if (method === "DELETE") {
+        await mcp.disconnect(id).catch(() => {});
+        await mcpServers.delete(id);
+        await secrets.delete(id).catch(() => {});
+        return send(res, 204);
+      }
+    }
+
     if ((m = path.match(/^\/connectors\/([^/]+)\/saved-requests$/))) {
       const instanceId = m[1]!;
       if (method === "GET") {
@@ -415,3 +509,10 @@ server.listen(PORT, "127.0.0.1", () => {
     `Orbit desktop sidecar → http://127.0.0.1:${PORT}  (workspace: ${WORKSPACE})`,
   );
 });
+
+// Tear down spawned MCP child processes on exit so none are orphaned.
+for (const signal of ["SIGINT", "SIGTERM"] as const) {
+  process.on(signal, () => {
+    void mcp.dispose().finally(() => process.exit(0));
+  });
+}

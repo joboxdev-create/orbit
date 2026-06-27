@@ -19,7 +19,20 @@ import {
   type UpdateConnectorInstanceData,
 } from "../domain/connector-instance.js";
 import type { SecretStore } from "../domain/secret-store.js";
+import type { McpService } from "./mcp-service.js";
 import { badRequest, notFound } from "../errors.js";
+
+/** Where a chat tool resolves to: a connector capability or an MCP server tool. */
+type ToolTarget =
+  | { kind: "connector"; instanceId: string; capability: string }
+  | { kind: "mcp"; mcpServerId: string; toolName: string };
+
+/** Make an MCP tool name safe + unique for model tool-calling
+ *  (`^[A-Za-z0-9_-]{1,128}$`), keyed by a short slice of the server id. */
+function mcpToolName(serverId: string, rawName: string): string {
+  const sanitized = rawName.replace(/[^A-Za-z0-9_-]/g, "_");
+  return `mcp_${serverId.slice(0, 8)}__${sanitized}`.slice(0, 128);
+}
 
 export interface RegisterConnectorInput {
   /** "catalog" = a code-backed connector from the registry; "custom" = a
@@ -37,6 +50,8 @@ export interface UpdateConnectorInput {
   name?: string;
   layer?: string;
   config?: Record<string, unknown>;
+  /** Curated capabilities (by name) to keep out of the chat tool pool. */
+  disabledCapabilities?: string[];
 }
 
 /**
@@ -71,6 +86,9 @@ export interface ConnectorInstanceServiceDeps {
   registry: ConnectorRegistry;
   /** Required for the credentialed flows (connect / disconnect / invoke). */
   secrets?: SecretStore;
+  /** Optional — when present, the project's connected MCP servers contribute
+   *  their tools to the chat tool pool alongside connector capabilities. */
+  mcp?: McpService;
   /** Defaults to the global fetch. */
   fetch?: typeof fetch;
   logger?: EngineLogger;
@@ -143,6 +161,9 @@ export class ConnectorInstanceService {
     const patch: UpdateConnectorInstanceData = {};
     if (input.name !== undefined) patch.name = input.name;
     if (input.config !== undefined) patch.config = input.config;
+    if (input.disabledCapabilities !== undefined) {
+      patch.disabledCapabilities = input.disabledCapabilities;
+    }
     // A catalog connector's layer is fixed by its definition; only custom
     // (user-declared) instances may change layer.
     if (
@@ -337,8 +358,11 @@ export class ConnectorInstanceService {
       if (conn.status !== "connected" || conn.id === modelInstanceId) continue;
       const d = this.deps.registry.get(conn.connectorType);
       if (!d || d.layer === "model") continue;
+      const disabled = new Set(conn.disabledCapabilities ?? []);
       for (const t of mcpToolsFromConnector(d)) {
         if (!t.annotations.readOnly || toolMap.has(t.name)) continue;
+        const capability = t.name.slice(d.type.length + 2);
+        if (disabled.has(capability)) continue;
         tools.push({
           name: t.name,
           description: t.description,
@@ -346,7 +370,7 @@ export class ConnectorInstanceService {
         });
         toolMap.set(t.name, {
           instanceId: conn.id,
-          capability: t.name.slice(d.type.length + 2),
+          capability,
         });
       }
     }
@@ -431,23 +455,23 @@ export class ConnectorInstanceService {
   private async gatherTools(modelInstanceId: string): Promise<{
     modelInstance: ConnectorInstanceRecord;
     tools: (ModelTool & { readOnly: boolean })[];
-    toolMap: Map<string, { instanceId: string; capability: string }>;
+    toolMap: Map<string, ToolTarget>;
   }> {
     const modelInstance = await this.requireInstance(modelInstanceId);
     const projectConnectors = await this.deps.repo.findByProject(
       modelInstance.projectId,
     );
     const tools: (ModelTool & { readOnly: boolean })[] = [];
-    const toolMap = new Map<
-      string,
-      { instanceId: string; capability: string }
-    >();
+    const toolMap = new Map<string, ToolTarget>();
     for (const conn of projectConnectors) {
       if (conn.status !== "connected" || conn.id === modelInstanceId) continue;
       const d = this.deps.registry.get(conn.connectorType);
       if (!d || d.layer === "model") continue;
+      const disabled = new Set(conn.disabledCapabilities ?? []);
       for (const t of mcpToolsFromConnector(d)) {
         if (toolMap.has(t.name)) continue;
+        const capability = t.name.slice(d.type.length + 2);
+        if (disabled.has(capability)) continue;
         tools.push({
           name: t.name,
           description: t.description,
@@ -455,11 +479,37 @@ export class ConnectorInstanceService {
           readOnly: t.annotations.readOnly,
         });
         toolMap.set(t.name, {
+          kind: "connector",
           instanceId: conn.id,
-          capability: t.name.slice(d.type.length + 2),
+          capability,
         });
       }
     }
+
+    // External MCP servers contribute their (runtime-discovered) tools too.
+    if (this.deps.mcp) {
+      const sources = await this.deps.mcp.listProjectTools(
+        modelInstance.projectId,
+      );
+      for (const { server, tools: mcpTools } of sources) {
+        for (const t of mcpTools) {
+          const name = mcpToolName(server.id, t.name);
+          if (toolMap.has(name)) continue;
+          tools.push({
+            name,
+            description: t.description ?? `${server.name}: ${t.name}`,
+            inputSchema: t.inputSchema as ModelTool["inputSchema"],
+            readOnly: t.readOnly,
+          });
+          toolMap.set(name, {
+            kind: "mcp",
+            mcpServerId: server.id,
+            toolName: t.name,
+          });
+        }
+      }
+    }
+
     return { modelInstance, tools, toolMap };
   }
 
@@ -523,6 +573,15 @@ export class ConnectorInstanceService {
     const { toolMap } = await this.gatherTools(modelInstanceId);
     const target = toolMap.get(name);
     if (!target) throw badRequest(`Unknown tool: ${name}`);
+    if (target.kind === "mcp") {
+      if (!this.deps.mcp) throw badRequest("MCP support not available");
+      const result = await this.deps.mcp.callTool(
+        target.mcpServerId,
+        target.toolName,
+        (input ?? {}) as Record<string, unknown>,
+      );
+      return { result };
+    }
     const out = await this.invoke(target.instanceId, target.capability, input);
     return { result: out.result };
   }

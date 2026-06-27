@@ -29,12 +29,14 @@ import {
   type SavedRequest,
 } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { BrandIcon } from "@/components/ui/brand-icon";
 import { SchemaForm, defaultsFor } from "@/components/schema-form";
+import { McpServersPanel } from "@/components/mcp-servers-panel";
 
 function layerLabel(layer: string): string {
   return LAYER_LABELS[layer as keyof typeof LAYER_LABELS] ?? layer;
@@ -135,11 +137,16 @@ export function ConnectorDetail({
       )}
 
       {isCustom ? (
-        <Card>
-          <CardContent className="py-6 text-sm text-muted-foreground">
-            This is a custom (local) service — it has no live API/MCP connection.
-          </CardContent>
-        </Card>
+        <div className="space-y-4">
+          <Card>
+            <CardContent className="py-4 text-sm text-muted-foreground">
+              Custom integration — no code-backed Capabilities, API or CLI. You
+              can still connect its <span className="font-medium">MCP server</span>{" "}
+              below; its tools join this project's chat.
+            </CardContent>
+          </Card>
+          <McpServersPanel connectorInstanceId={connector.id} />
+        </div>
       ) : connected ? (
         <Card>
           <CardContent className="flex items-center justify-between gap-4 py-4">
@@ -186,7 +193,11 @@ export function ConnectorDetail({
       )}
 
       {connected && schema && (
-        <SurfaceTabs instanceId={connector.id} schema={schema} />
+        <SurfaceTabs
+          instance={connector}
+          schema={schema}
+          onChanged={onChanged}
+        />
       )}
     </div>
   );
@@ -200,12 +211,15 @@ type SurfaceTab = "capabilities" | "api" | "mcp" | "cli";
  * (L2). The divider in the tab bar keeps that hierarchy legible.
  */
 function SurfaceTabs({
-  instanceId,
+  instance,
   schema,
+  onChanged,
 }: {
-  instanceId: string;
+  instance: ConnectorInstance;
   schema: ConnectorSchema;
+  onChanged: () => void;
 }) {
+  const instanceId = instance.id;
   const [tab, setTab] = useState<SurfaceTab>("capabilities");
 
   return (
@@ -231,6 +245,8 @@ function SurfaceTabs({
           <CapabilitiesPanel
             instanceId={instanceId}
             capabilities={schema.capabilities}
+            disabledCapabilities={instance.disabledCapabilities}
+            onChanged={onChanged}
           />
         </Panel>
       )}
@@ -240,11 +256,11 @@ function SurfaceTabs({
         </Panel>
       )}
       {tab === "mcp" && (
-        <Panel sub="The service's own MCP server (official or third-party).">
-          <ComingSoonCard
-            icon={<Boxes size={20} />}
-            title="MCP — official server"
-            description="Connect this service's official (or a third-party) MCP server and use its tools, resources and prompts."
+        <Panel sub="The service's own MCP server(s) — official or third-party. Connect one and its tools join this project's chat.">
+          <McpServersPanel
+            connectorInstanceId={instanceId}
+            connectorName={schema.displayName}
+            officialMcp={schema.officialMcp}
           />
         </Panel>
       )}
@@ -297,9 +313,13 @@ function Panel({ sub, children }: { sub: string; children: ReactNode }) {
 function CapabilitiesPanel({
   instanceId,
   capabilities,
+  disabledCapabilities,
+  onChanged,
 }: {
   instanceId: string;
   capabilities: CapabilitySchema[];
+  disabledCapabilities: string[];
+  onChanged: () => void;
 }) {
   const groups = useMemo(() => groupByTopic(capabilities), [capabilities]);
   const canGroup = groups.length > 1;
@@ -308,6 +328,29 @@ function CapabilitiesPanel({
   const [openTopics, setOpenTopics] = useState<Set<string>>(
     () => new Set(groups.map(([t]) => t)),
   );
+  // Local mirror of the disabled set for optimistic toggling.
+  const [disabled, setDisabled] = useState<Set<string>>(
+    () => new Set(disabledCapabilities),
+  );
+  const [savingName, setSavingName] = useState<string | null>(null);
+
+  async function setEnabled(name: string, enabled: boolean) {
+    const next = new Set(disabled);
+    enabled ? next.delete(name) : next.add(name);
+    setDisabled(next);
+    setSavingName(name);
+    try {
+      await api.updateConnector(instanceId, {
+        disabledCapabilities: [...next],
+      });
+      onChanged();
+    } catch {
+      // Revert on failure.
+      setDisabled(new Set(disabled));
+    } finally {
+      setSavingName(null);
+    }
+  }
 
   if (capabilities.length === 0) {
     return (
@@ -324,6 +367,9 @@ function CapabilitiesPanel({
       capability={c}
       open={openName === c.name}
       onToggle={() => setOpenName((cur) => (cur === c.name ? null : c.name))}
+      enabled={!disabled.has(c.name)}
+      saving={savingName === c.name}
+      onSetEnabled={(v) => setEnabled(c.name, v)}
     />
   );
 
@@ -627,34 +673,41 @@ function TopicGroup({
   );
 }
 
-/** Shared collapsible row: a clickable header that expands to a body. */
+/** Shared collapsible row: a clickable header that expands to a body. An
+ *  optional `action` sits outside the toggle button (so interactive controls
+ *  like a switch don't nest a button inside a button). */
 function ExpandableRow({
   open,
   onToggle,
   header,
+  action,
   children,
 }: {
   open: boolean;
   onToggle: () => void;
   header: ReactNode;
+  action?: ReactNode;
   children: ReactNode;
 }) {
   return (
     <Card>
       <CardContent className="space-y-3">
-        <button
-          type="button"
-          onClick={onToggle}
-          className="flex w-full items-center gap-2 text-left"
-        >
-          <ChevronRight
-            size={14}
-            className={`shrink-0 text-muted-foreground transition-transform ${
-              open ? "rotate-90" : ""
-            }`}
-          />
-          {header}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={onToggle}
+            className="flex min-w-0 flex-1 items-center gap-2 text-left"
+          >
+            <ChevronRight
+              size={14}
+              className={`shrink-0 text-muted-foreground transition-transform ${
+                open ? "rotate-90" : ""
+              }`}
+            />
+            {header}
+          </button>
+          {action}
+        </div>
         {open && (
           <div className="space-y-3 border-t border-border pt-3">{children}</div>
         )}
@@ -668,11 +721,18 @@ function CapabilityRow({
   capability,
   open,
   onToggle,
+  enabled,
+  saving,
+  onSetEnabled,
 }: {
   instanceId: string;
   capability: CapabilitySchema;
   open: boolean;
   onToggle: () => void;
+  /** Whether this capability is offered to the project's chat agent. */
+  enabled: boolean;
+  saving: boolean;
+  onSetEnabled: (enabled: boolean) => void;
 }) {
   const [values, setValues] = useState<Record<string, unknown>>(() =>
     defaultsFor(capability.input),
@@ -710,6 +770,23 @@ function CapabilityRow({
             {capability.readOnly ? "read-only" : "write"}
           </Badge>
         </>
+      }
+      action={
+        <label
+          className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground"
+          title={
+            enabled
+              ? "Offered to this project's chat agent. Toggle off to keep it out (e.g. to avoid duplicating an MCP tool)."
+              : "Hidden from the agent. The capability still runs here on the direct path."
+          }
+        >
+          <Switch
+            checked={enabled}
+            disabled={saving}
+            onCheckedChange={onSetEnabled}
+          />
+          Agent
+        </label>
       }
     >
       {capability.description && (

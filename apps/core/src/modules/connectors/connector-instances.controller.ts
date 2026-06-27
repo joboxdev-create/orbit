@@ -56,6 +56,7 @@ const UpdateInstanceBody = z.object({
   name: z.string().min(1).max(120).optional(),
   layer: LayerKind.optional(),
   config: z.record(z.unknown()).optional(),
+  disabledCapabilities: z.array(z.string()).optional(),
 });
 
 @Controller()

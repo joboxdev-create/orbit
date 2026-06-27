@@ -27,6 +27,7 @@ export class PrismaConnectorInstanceRepository
         name: data.name,
         status: data.status ?? "configured",
         config: (data.config ?? {}) as Prisma.InputJsonValue,
+        disabledCapabilities: [],
         encryptedCredentials: data.encryptedCredentials ?? null,
       },
     });
@@ -63,6 +64,9 @@ export class PrismaConnectorInstanceRepository
         ...(patch.config !== undefined && {
           config: patch.config as Prisma.InputJsonValue,
         }),
+        ...(patch.disabledCapabilities !== undefined && {
+          disabledCapabilities: patch.disabledCapabilities,
+        }),
         ...(patch.encryptedCredentials !== undefined && {
           encryptedCredentials: patch.encryptedCredentials,
         }),
@@ -85,6 +89,7 @@ function toRecord(row: ConnectorInstance): ConnectorInstanceRecord {
     name: row.name,
     status: row.status as ConnectorInstanceStatus,
     config: (row.config ?? {}) as Record<string, unknown>,
+    disabledCapabilities: row.disabledCapabilities ?? [],
     encryptedCredentials: row.encryptedCredentials ?? null,
     createdAt: row.createdAt.toISOString(),
   };

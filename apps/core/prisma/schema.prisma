@@ -74,6 +74,8 @@ model ConnectorInstance {
   status        String   @default("configured")
   // Non-secret, connector-defined config.
   config        Json     @default("{}")
+  // Curated capability names kept out of the chat tool pool (avoid MCP dupes).
+  disabledCapabilities String[] @default([])
   // Secret credentials, AES-256-GCM encrypted at rest (iv:tag:ciphertext, base64).
   encryptedCredentials String?
   createdAt     DateTime @default(now())

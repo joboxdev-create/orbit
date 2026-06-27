@@ -12,12 +12,14 @@ import type { ProjectRecord } from "../../domain/project.js";
 import type { ConnectorInstanceRecord } from "../../domain/connector-instance.js";
 import type { SavedRequest } from "../../domain/saved-request.js";
 import type { Conversation } from "../../domain/conversation.js";
+import type { McpServer } from "../../domain/mcp-server.js";
 
 const ORBIT_DIR = ".orbit";
 const PROJECT_MANIFEST = "project.json";
 const CONNECTORS_DIR = "connectors";
 const REQUESTS_DIR = "requests";
 const CONVERSATIONS_DIR = "conversations";
+const MCP_SERVERS_DIR = "mcp-servers";
 
 function isEnoent(err: unknown): boolean {
   return (err as NodeJS.ErrnoException)?.code === "ENOENT";
@@ -35,6 +37,20 @@ async function readJson<T>(path: string): Promise<T | null> {
 async function writeJson(path: string, data: unknown): Promise<void> {
   await mkdir(dirname(path), { recursive: true });
   await writeFile(path, `${JSON.stringify(data, null, 2)}\n`, "utf8");
+}
+
+/** Default fields added after the on-disk schema grew (back-compat for records
+ *  written before the field existed). `enabled` was added with toggles. */
+function normalizeMcpServer(record: McpServer): McpServer {
+  return { ...record, enabled: record.enabled !== false };
+}
+
+/** Back-compat for connector records written before a field existed.
+ *  `disabledCapabilities` was added with per-capability chat toggles. */
+function normalizeConnector(
+  record: ConnectorInstanceRecord,
+): ConnectorInstanceRecord {
+  return { ...record, disabledCapabilities: record.disabledCapabilities ?? [] };
 }
 
 /**
@@ -79,6 +95,14 @@ export class FileWorkspace {
 
   private conversationPath(projectDir: string, id: string): string {
     return join(this.conversationsDir(projectDir), `${id}.json`);
+  }
+
+  private mcpServersDir(projectDir: string): string {
+    return join(projectDir, ORBIT_DIR, MCP_SERVERS_DIR);
+  }
+
+  private mcpServerPath(projectDir: string, id: string): string {
+    return join(this.mcpServersDir(projectDir), `${id}.json`);
   }
 
   // ── Projects ────────────────────────────────────────────────────────────
@@ -145,7 +169,7 @@ export class FileWorkspace {
     for (const file of files) {
       if (!file.endsWith(".json")) continue;
       const record = await readJson<ConnectorInstanceRecord>(join(dir, file));
-      if (record) out.push(record);
+      if (record) out.push(normalizeConnector(record));
     }
     return out;
   }
@@ -166,7 +190,7 @@ export class FileWorkspace {
     for (const { dir } of await this.listProjects()) {
       const path = this.connectorPath(dir, instanceId);
       const record = await readJson<ConnectorInstanceRecord>(path);
-      if (record) return { projectDir: dir, path, record };
+      if (record) return { projectDir: dir, path, record: normalizeConnector(record) };
     }
     return null;
   }
@@ -259,6 +283,57 @@ export class FileWorkspace {
   }
 
   async removeConversationFile(path: string): Promise<void> {
+    await rm(path, { force: true });
+  }
+
+  // ── MCP servers ───────────────────────────────────────────────────────────
+
+  async listMcpServers(projectDir: string): Promise<McpServer[]> {
+    const dir = this.mcpServersDir(projectDir);
+    let files: string[];
+    try {
+      files = await readdir(dir);
+    } catch (err) {
+      if (isEnoent(err)) return [];
+      throw err;
+    }
+    const out: McpServer[] = [];
+    for (const file of files) {
+      if (!file.endsWith(".json")) continue;
+      const record = await readJson<McpServer>(join(dir, file));
+      if (record) out.push(normalizeMcpServer(record));
+    }
+    return out;
+  }
+
+  /** Every MCP server across all projects (for connector-instance grouping). */
+  async listAllMcpServers(): Promise<McpServer[]> {
+    const out: McpServer[] = [];
+    for (const { dir } of await this.listProjects()) {
+      out.push(...(await this.listMcpServers(dir)));
+    }
+    return out;
+  }
+
+  async writeMcpServer(projectDir: string, record: McpServer): Promise<void> {
+    await writeJson(this.mcpServerPath(projectDir, record.id), record);
+  }
+
+  /** Locate an MCP server across every project (keyed only by its id). */
+  async findMcpServer(id: string): Promise<{
+    projectDir: string;
+    path: string;
+    record: McpServer;
+  } | null> {
+    for (const { dir } of await this.listProjects()) {
+      const path = this.mcpServerPath(dir, id);
+      const record = await readJson<McpServer>(path);
+      if (record) return { projectDir: dir, path, record: normalizeMcpServer(record) };
+    }
+    return null;
+  }
+
+  async removeMcpServerFile(path: string): Promise<void> {
     await rm(path, { force: true });
   }
 }

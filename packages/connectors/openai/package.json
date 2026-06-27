@@ -1,5 +1,5 @@
 {
-  "name": "@orbit/engine",
+  "name": "@orbit/connector-openai",
   "version": "0.0.0",
   "private": true,
   "main": "./dist/index.js",
@@ -17,12 +17,6 @@
     "clean": "rm -rf dist .turbo"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.29.0",
-    "@orbit/connector-anthropic": "workspace:*",
-    "@orbit/connector-github": "workspace:*",
-    "@orbit/connector-keycloak": "workspace:*",
-    "@orbit/connector-ollama": "workspace:*",
-    "@orbit/connector-openai": "workspace:*",
     "@orbit/connector-sdk": "workspace:*",
     "@orbit/shared": "workspace:*",
     "zod": "^3.24.1"

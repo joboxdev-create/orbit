@@ -172,6 +172,16 @@ export const githubConnector: ConnectorDefinition<
     // method+path) reusing the connected token, without a hand-written handler.
     request: ghRawRequest,
   },
+  // GitHub publishes an official remote MCP server (Streamable HTTP), auth via
+  // an Authorization: Bearer <PAT> header. Suggested one-click in the MCP tab.
+  officialMcp: {
+    transport: "http",
+    url: "https://api.githubcopilot.com/mcp/",
+    secretKeys: ["Authorization"],
+    description:
+      "GitHub's official remote MCP server. Auth header value: \"Bearer <your PAT>\".",
+    docsUrl: "https://github.com/github/github-mcp-server",
+  },
   testConnection: async (ctx) => {
     // With a token, validate it (GET /user → 401 if invalid); without one, just
     // check reachability with the public /rate_limit endpoint.

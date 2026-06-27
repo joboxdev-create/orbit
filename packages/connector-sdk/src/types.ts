@@ -182,6 +182,30 @@ export interface ModelProvider {
  * The full contract a connector package (@orbit/connector-*) must export.
  * The core depends only on this type, never on the connector implementation.
  */
+/**
+ * A connector's own **official MCP server**, surfaced as a one-click suggestion
+ * in the connector's MCP tab (auto-discovery, step 1). Non-secret defaults live
+ * here; secret values (tokens) the user provides at connect time and they go to
+ * the SecretStore — never into this static definition or the `.orbit/` record.
+ */
+export interface OfficialMcpSpec {
+  transport: "stdio" | "http" | "sse";
+  /** stdio: the command to spawn and its args + non-secret env. */
+  command?: string;
+  args?: string[];
+  env?: Record<string, string>;
+  /** http / sse: the endpoint and non-secret headers. */
+  url?: string;
+  headers?: Record<string, string>;
+  /** Names of the secret inputs the user must fill — env var names (stdio) or
+   *  header names (http/sse). Rendered as empty, secret rows in the add form. */
+  secretKeys?: string[];
+  /** Short human description shown on the suggestion card. */
+  description?: string;
+  /** Link to the server's docs/repo. */
+  docsUrl?: string;
+}
+
 export interface ConnectorDefinition<
   Config = Record<string, unknown>,
   Credentials = Record<string, unknown>,
@@ -203,6 +227,9 @@ export interface ConnectorDefinition<
   /** Optional model-provider face (layer "model"): multi-turn chat for the
    *  internal chat/agent. */
   model?: ModelProvider;
+  /** Optional: the service's own official MCP server, suggested one-click in
+   *  the connector's MCP tab. */
+  officialMcp?: OfficialMcpSpec;
   /** Lightweight connectivity check used when configuring an instance. */
   testConnection: (ctx: ConnectorContext<Config, Credentials>) => Promise<void>;
 }

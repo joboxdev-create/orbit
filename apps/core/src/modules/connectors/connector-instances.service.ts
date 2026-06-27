@@ -39,6 +39,7 @@ export interface UpdateInstanceInput {
   name?: string;
   layer?: string;
   config?: Record<string, unknown>;
+  disabledCapabilities?: string[];
 }
 
 /**
